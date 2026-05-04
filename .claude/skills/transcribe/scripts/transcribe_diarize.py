@@ -8,7 +8,9 @@
 # ///
 """Transcribe audio (optionally with speaker diarization) using OpenAI.
 
-Run with: uv run --script .claude/skills/transcribe/scripts/transcribe_diarize.py <audio> [flags]
+Run with:
+    uv run --script .claude/skills/transcribe/scripts/transcribe_diarize.py \\
+        <audio> [flags]
 """
 
 from __future__ import annotations
@@ -18,9 +20,9 @@ import base64
 import json
 import mimetypes
 import os
-from pathlib import Path
 import sys
-from typing import Any, Dict, List, NoReturn, Optional, Tuple
+from pathlib import Path
+from typing import Any, NoReturn
 
 
 def _load_dotenv_quietly() -> None:
@@ -30,7 +32,10 @@ def _load_dotenv_quietly() -> None:
     `export OPENAI_API_KEY=...` always wins over the .env file.
     """
     try:
-        from dotenv import find_dotenv, load_dotenv
+        from dotenv import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports]
+            find_dotenv,
+            load_dotenv,
+        )
     except ImportError:
         return  # uv should have installed it; skip if not.
     path = find_dotenv(usecwd=True)
@@ -47,12 +52,13 @@ def _check_runner() -> None:
         return
     # If openai was importable above we're fine; this is a soft hint.
     try:
-        import openai  # noqa: F401
+        import openai  # noqa: F401, PLC0415  # pyright: ignore[reportMissingImports]
     except ImportError:
         _die(
             "openai is not installed in the current environment.\n"
             "  Run via uv (recommended):  "
-            "uv run --script .claude/skills/transcribe/scripts/transcribe_diarize.py ...\n"
+            "uv run --script "
+            ".claude/skills/transcribe/scripts/transcribe_diarize.py ...\n"
             "  If uv cannot resolve dependencies, surface the full uv error — "
             "do not work around it with manual pip installs."
         )
@@ -91,7 +97,7 @@ def _ensure_api_key(dry_run: bool) -> None:
     _die(msg)
 
 
-def _normalize_response_format(value: Optional[str]) -> str:
+def _normalize_response_format(value: str | None) -> str:
     if not value:
         return DEFAULT_RESPONSE_FORMAT
     fmt = value.strip().lower()
@@ -103,7 +109,7 @@ def _normalize_response_format(value: Optional[str]) -> str:
     return fmt
 
 
-def _normalize_chunking_strategy(value: Optional[str]) -> Any:
+def _normalize_chunking_strategy(value: str | None) -> Any:
     if not value:
         return DEFAULT_CHUNKING_STRATEGY
     raw = str(value).strip()
@@ -129,9 +135,9 @@ def _encode_data_url(path: Path) -> str:
     return f"data:{mime};base64,{encoded}"
 
 
-def _parse_known_speakers(raw_items: List[str]) -> Tuple[List[str], List[str]]:
-    names: List[str] = []
-    refs: List[str] = []
+def _parse_known_speakers(raw_items: list[str]) -> tuple[list[str], list[str]]:
+    names: list[str] = []
+    refs: list[str] = []
     for raw in raw_items:
         if "=" not in raw:
             _die("known-speaker must be NAME=PATH")
@@ -156,8 +162,8 @@ def _output_extension(response_format: str) -> str:
 def _build_output_path(
     audio_path: Path,
     response_format: str,
-    out: Optional[str],
-    out_dir: Optional[str],
+    out: str | None,
+    out_dir: str | None,
 ) -> Path:
     ext = "." + _output_extension(response_format)
     if out:
@@ -176,7 +182,9 @@ def _build_output_path(
 
 def _create_client():
     try:
-        from openai import OpenAI
+        from openai import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports]
+            OpenAI,
+        )
     except ImportError:
         _die(
             "openai SDK not importable. Run this script via "
@@ -206,10 +214,10 @@ def _validate_audio(path: Path) -> None:
 
 def _build_payload(
     args: argparse.Namespace,
-    known_speaker_names: List[str],
-    known_speaker_refs: List[str],
-) -> Dict[str, Any]:
-    payload: Dict[str, Any] = {
+    known_speaker_names: list[str],
+    known_speaker_refs: list[str],
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
         "model": args.model,
         "response_format": args.response_format,
         "chunking_strategy": args.chunking_strategy,
@@ -233,10 +241,10 @@ def _die_api(category: str, exit_code: int, message: str) -> NoReturn:
 def _run_one(
     client: Any,
     audio_path: Path,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
 ) -> Any:
     # Lazy import so dry-run/preflight paths don't require the SDK loaded.
-    from openai import (
+    from openai import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports]
         APIConnectionError,
         APITimeoutError,
         AuthenticationError,
@@ -272,7 +280,8 @@ def _run_one(
         _die_api(
             "permission", 11,
             f"Model {model!r} was not found (HTTP 404). "
-            "Check the model name; it may be misspelled or unavailable on this account.\n"
+            "Check the model name; it may be misspelled or "
+            "unavailable on this account.\n"
             f"  Details: {exc}",
         )
     except RateLimitError as exc:
@@ -313,7 +322,9 @@ def _run_one(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Transcribe audio (optionally with speaker diarization) using OpenAI."
+        description=(
+            "Transcribe audio (optionally with speaker diarization) using OpenAI."
+        )
     )
     parser.add_argument("audio", nargs="+", help="Audio file(s) to transcribe")
     parser.add_argument(
@@ -365,7 +376,10 @@ def main() -> None:
 
     if args.prompt and "transcribe-diarize" in args.model:
         _die("prompt is not supported with gpt-4o-transcribe-diarize")
-    if args.response_format == "diarized_json" and "transcribe-diarize" not in args.model:
+    if (
+        args.response_format == "diarized_json"
+        and "transcribe-diarize" not in args.model
+    ):
         _die("diarized_json requires gpt-4o-transcribe-diarize")
 
     _check_runner()
@@ -377,7 +391,10 @@ def main() -> None:
 
     known_names, known_refs = _parse_known_speakers(args.known_speaker)
     if known_names and "transcribe-diarize" not in args.model:
-        _warn("known-speaker references are only supported for gpt-4o-transcribe-diarize")
+        _warn(
+            "known-speaker references are only supported for "
+            "gpt-4o-transcribe-diarize"
+        )
     payload = _build_payload(args, known_names, known_refs)
 
     if args.dry_run:
@@ -392,7 +409,9 @@ def main() -> None:
         if args.stdout:
             print(output)
             continue
-        out_path = _build_output_path(path, args.response_format, args.out, args.out_dir)
+        out_path = _build_output_path(
+            path, args.response_format, args.out, args.out_dir
+        )
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(output, encoding="utf-8")
         print(f"Wrote {out_path}")

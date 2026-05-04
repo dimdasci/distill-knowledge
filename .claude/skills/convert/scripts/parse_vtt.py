@@ -17,7 +17,9 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
-TIMESTAMP_RE = re.compile(r"(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})")
+TIMESTAMP_RE = re.compile(
+    r"(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})"
+)
 SPEAKER_RE = re.compile(r"^(.+?):\s+(.+)$")
 
 SCREEN_PATTERNS = {
@@ -78,7 +80,7 @@ def _check_input(vtt_path: str) -> Path:
 def parse_vtt(filepath: str) -> dict:
     """Parse a VTT file and return structured data."""
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             lines = f.read().splitlines()
     except (OSError, UnicodeDecodeError) as e:
         _die(f"reading file: {e}")
@@ -110,7 +112,10 @@ def parse_vtt(filepath: str) -> dict:
         try:
             start_sec, end_sec = ts_to_seconds(start_ts), ts_to_seconds(end_ts)
         except (ValueError, IndexError):
-            print(f"Warning: malformed timestamp at line {i + 1}, skipping.", file=sys.stderr)
+            print(
+                f"Warning: malformed timestamp at line {i + 1}, skipping.",
+                file=sys.stderr,
+            )
             i += 1
             continue
 
@@ -126,7 +131,11 @@ def parse_vtt(filepath: str) -> dict:
                 break
             if TIMESTAMP_RE.match(tl):
                 break
-            if tl.isdigit() and i + 1 < len(lines) and TIMESTAMP_RE.match(lines[i + 1].strip()):
+            if (
+                tl.isdigit()
+                and i + 1 < len(lines)
+                and TIMESTAMP_RE.match(lines[i + 1].strip())
+            ):
                 break
             text_lines.append(tl)
             i += 1
