@@ -9,7 +9,7 @@
 """Transcribe audio (optionally with speaker diarization) using OpenAI.
 
 Run with:
-    uv run --script .claude/skills/transcribe/scripts/transcribe_diarize.py \\
+    uv run --script .claude/skills/convert/scripts/transcribe_diarize.py \\
         <audio> [flags]
 """
 
@@ -58,7 +58,7 @@ def _check_runner() -> None:
             "openai is not installed in the current environment.\n"
             "  Run via uv (recommended):  "
             "uv run --script "
-            ".claude/skills/transcribe/scripts/transcribe_diarize.py ...\n"
+            ".claude/skills/convert/scripts/transcribe_diarize.py ...\n"
             "  If uv cannot resolve dependencies, surface the full uv error — "
             "do not work around it with manual pip installs."
         )

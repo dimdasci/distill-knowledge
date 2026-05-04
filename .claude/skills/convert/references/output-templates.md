@@ -32,18 +32,39 @@ uv run --script .claude/skills/convert/scripts/parse_vtt.py \
 Read `metadata` + `screen_references` first; `cues` in chunks. Teams / Google Meet / non-English: detection won't fire — read VTT directly.
 
 **Re-transcription with diarization:**
-1. Up front, ask the user: speaker count, names, roles, distinguishing details. Collect up to 4 reference-clip paths if available.
+1. Intake answers from Step 0 provide: language, speaker count, topic, terms. Collect up to 4 reference-clip paths if available.
 2. Extract audio if needed: `ffmpeg -i video.mp4 -vn -acodec libmp3lame -q:a 2 tmp/audio.mp3`.
 3. Run:
    ```bash
-   uv run --script .claude/skills/transcribe/scripts/transcribe_diarize.py \
+   uv run --script .claude/skills/convert/scripts/transcribe_diarize.py \
      tmp/audio.mp3 \
      --model gpt-4o-transcribe-diarize \
      --response-format diarized_json \
+     --language {lang from intake} \
      --out-dir tmp/transcribe/{meeting-slug}
    ```
-   Add `--known-speaker "Name=path/to/sample.wav"` per known speaker (max 4) and `--language` if known.
+   Add `--known-speaker "Name=path/to/sample.wav"` per known speaker (max 4).
 4. Diarized JSON has `segments[]` with `speaker`/`start`/`end`/`text` — do NOT pipe through `parse_vtt.py`.
+
+**Speaker labelling + cleaned transcript (after diarization):**
+1. Show speaker samples:
+   ```bash
+   uv run --script .claude/skills/convert/scripts/render_transcript.py \
+     tmp/transcribe/{meeting-slug}/audio.transcript.json --samples
+   ```
+2. User names speakers (or confirms raw labels).
+3. Render final transcript:
+   ```bash
+   uv run --script .claude/skills/convert/scripts/render_transcript.py \
+     tmp/transcribe/{meeting-slug}/audio.transcript.json \
+     --speakers "A=Name1,B=Name2" \
+     --source "inbox/{original-file}" \
+     --model "gpt-4o-transcribe-diarize" \
+     --language "{lang}" \
+     --topic "{topic from intake}" \
+     --terms "{terms from intake}" \
+     --out outbox/{meeting-slug}/transcript.md
+   ```
 
 **Probe a frame for screen content:**
 ```bash
