@@ -46,22 +46,28 @@ Every negative query shares keywords or concepts with the skill but needs someth
 ## Running
 
 ```bash
-# All queries, 3 runs each (default)
-./run-trigger-eval.sh
+# Pi (default) — passes skill path via --skill flag
+./run-trigger-eval.sh --agent pi
+./run-trigger-eval.sh --agent pi --split train
 
-# Train set only (use while iterating on description)
-./run-trigger-eval.sh --split train
-
-# Validation set (check generalization after changes)
-./run-trigger-eval.sh --split validation
+# Claude Code — skill auto-discovered from .claude/skills/
+./run-trigger-eval.sh --agent claude
+./run-trigger-eval.sh --agent claude --split validation
 
 # Custom runs and threshold
-./run-trigger-eval.sh --runs 5 --threshold 0.6
+./run-trigger-eval.sh --agent pi --runs 5 --threshold 0.6
 ```
 
-Requires `claude` (Claude Code CLI ≥2.1) and `jq`.
+### How detection works per agent
 
-The script uses `claude -p <query> --output-format stream-json --verbose` and checks the event stream for `Skill` tool_use calls matching the skill name.
+| Agent | Invocation | Skill triggered when… |
+|---|---|---|
+| **pi** | `pi --mode json --no-session --skill skills/convert -p <query>` | `tool_execution_start` event with `toolName: "read"` and path containing `SKILL.md` |
+| **claude** | `claude -p <query> --output-format stream-json --verbose` | assistant message with `tool_use` `name: "Skill"` and `input.skill: "convert"` |
+
+Requires `jq` and the respective agent CLI (`pi` or `claude`).
+
+The script uses `--output-format stream-json --verbose` (Claude Code) or `--mode json` (pi) and checks the event stream for skill activation signals.
 
 ## Output
 

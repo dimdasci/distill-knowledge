@@ -2,30 +2,42 @@
 # ---------------------------------------------------------------------------
 # Skill trigger evaluation for the `convert` skill.
 #
-# Runs each query through Claude Code and checks whether the skill was
+# Runs each query through an agent CLI and checks whether the skill was
 # activated.  Produces a JSON report with per-query trigger rates and a
 # pass/fail summary.
 #
 # Usage:
-#   ./run-trigger-eval.sh                       # all queries, 3 runs each
-#   ./run-trigger-eval.sh --split train         # train set only
-#   ./run-trigger-eval.sh --split validation    # validation set only
-#   ./run-trigger-eval.sh --runs 5              # 5 runs per query
-#   ./run-trigger-eval.sh --threshold 0.6       # custom pass threshold
+#   ./run-trigger-eval.sh --agent pi              # use pi (default)
+#   ./run-trigger-eval.sh --agent claude          # use Claude Code
+#   ./run-trigger-eval.sh --split train           # train set only
+#   ./run-trigger-eval.sh --split validation      # validation set only
+#   ./run-trigger-eval.sh --runs 5                # 5 runs per query
+#   ./run-trigger-eval.sh --threshold 0.6         # custom pass threshold
 #
-# Requires: claude (Claude Code CLI), jq
+# Agents:
+#   pi      — requires: pi, jq
+#             invokes: pi --mode json --no-session --skill <path> -p <query>
+#             detects: tool_execution_start with read on SKILL.md
+#
+#   claude  — requires: claude, jq
+#             invokes: claude -p <query> --output-format stream-json --verbose
+#             detects: assistant message with Skill tool_use
+#
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 QUERIES_FILE="${SCRIPT_DIR}/queries.json"
 SKILL_NAME="convert"
 RUNS=3
 SPLIT=""
 THRESHOLD=0.5
+AGENT="pi"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --agent)      AGENT="$2";     shift 2 ;;
     --runs)       RUNS="$2";      shift 2 ;;
     --split)      SPLIT="$2";     shift 2 ;;
     --threshold)  THRESHOLD="$2"; shift 2 ;;
@@ -39,9 +51,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 # --- preflight -------------------------------------------------------------
-for cmd in claude jq; do
-  command -v "$cmd" >/dev/null 2>&1 || { echo "Error: $cmd not found" >&2; exit 1; }
-done
+case "$AGENT" in
+  pi)
+    command -v pi >/dev/null 2>&1 || { echo "Error: pi not found" >&2; exit 1; }
+    ;;
+  claude)
+    command -v claude >/dev/null 2>&1 || { echo "Error: claude not found" >&2; exit 1; }
+    ;;
+  *)
+    echo "Error: unknown agent '$AGENT'. Use 'pi' or 'claude'." >&2; exit 1
+    ;;
+esac
+
+command -v jq >/dev/null 2>&1 || { echo "Error: jq not found" >&2; exit 1; }
 
 if [[ ! -f "$QUERIES_FILE" ]]; then
   echo "Error: queries file not found: $QUERIES_FILE" >&2
@@ -62,6 +84,7 @@ if [[ "$COUNT" -eq 0 ]]; then
 fi
 
 echo "=== Skill trigger eval: $SKILL_NAME ==="
+echo "    Agent:     $AGENT"
 echo "    Queries:   $COUNT"
 echo "    Runs/each: $RUNS"
 echo "    Threshold: $THRESHOLD"
@@ -69,11 +92,24 @@ echo "    Split:     ${SPLIT:-all}"
 echo ""
 
 # --- check if skill triggered -----------------------------------------------
-check_triggered() {
+
+check_triggered_pi() {
   local query="$1"
-  # Run claude in pipe mode with stream-json (verbose) output.
-  # Each line is a JSON event. Look for an assistant message containing a
-  # Skill tool_use call matching our skill name.
+  # pi --mode json streams JSONL events. Skill activation = model reads SKILL.md.
+  pi --mode json --no-session --skill "$SKILL_DIR" -p "$query" 2>/dev/null \
+    | jq -e --slurp --arg skill_dir "$SKILL_DIR" \
+      'any(.[];
+        .type == "tool_execution_start" and
+        .toolName == "read" and
+        (.args.path | tostring | test("SKILL\\.md"))
+      )' \
+      > /dev/null 2>&1
+}
+
+check_triggered_claude() {
+  local query="$1"
+  # Claude Code streams JSONL with --output-format stream-json --verbose.
+  # Skill activation = Skill tool_use call.
   claude -p "$query" --output-format stream-json --verbose 2>/dev/null \
     | jq -e --slurp --arg skill "$SKILL_NAME" \
       'any(.[]; .type == "assistant" and
@@ -82,6 +118,13 @@ check_triggered() {
         ))
       )' \
       > /dev/null 2>&1
+}
+
+check_triggered() {
+  case "$AGENT" in
+    pi)     check_triggered_pi "$1" ;;
+    claude) check_triggered_claude "$1" ;;
+  esac
 }
 
 # --- run eval ----------------------------------------------------------------
@@ -141,7 +184,9 @@ echo "=== Results: $PASS/$TOTAL passed ($FAIL failed) ==="
 # Write report
 REPORT_PATH="${SCRIPT_DIR}/report.json"
 echo "$RESULTS" | jq '{
+  agent: "'"$AGENT"'",
   skill: "'"$SKILL_NAME"'",
+  skill_dir: "'"$SKILL_DIR"'",
   runs_per_query: '"$RUNS"',
   threshold: '"$THRESHOLD"',
   split: "'"${SPLIT:-all}"'",
