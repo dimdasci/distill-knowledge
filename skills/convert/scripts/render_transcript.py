@@ -19,6 +19,10 @@ Filters (default-on):
     - Drop hallucination blacklist matches
     - Merge consecutive same-speaker segments
     - Absorb ≤2-word cross-talk interjections back into surrounding speaker turns
+    - Reconstruct overlapping speech: when two speakers' segments overlap in
+      time (interleaved A/B/A/B), group each speaker's text into one
+      sequential turn so each idea reads as a phrase, not word-by-word.
+      Disable with --no-reconstruct-overlaps.
 """
 
 from __future__ import annotations
@@ -138,6 +142,93 @@ def _filter_segments(
             continue
 
         result.append(seg)
+
+    return result
+
+
+def _reconstruct_overlaps(
+    segments: list[dict[str, Any]],
+    *,
+    tolerance: float = 0.0,
+    max_cluster_seconds: float = 20.0,
+    max_cluster_segments: int = 8,
+) -> list[dict[str, Any]]:
+    """Reconstruct overlapping speech into sequential per-speaker phrases.
+
+    When two different speakers' segments overlap in time (segment B starts
+    before segment A ends), the diarized output interleaves them as
+    A/B/A/B. This function detects bounded overlap clusters and groups
+    each speaker's segments into a single concatenated turn — preserving
+    the full idea per speaker rather than word-by-word interleaving.
+
+    Cluster bounds (to prevent runaway collapse of long debates):
+      - Extend only while the next segment overlaps the immediately
+        previous segment in the cluster (next.start < prev.end). A pause
+        between consecutive segments closes the cluster, so normal turn
+        flow is preserved.
+      - Hard cap: max_cluster_seconds total span.
+      - Hard cap: max_cluster_segments raw segments.
+
+    Within a cluster, speakers are emitted in the order they first
+    started speaking. Each emitted turn keeps its earliest start and
+    latest end.
+    """
+    if len(segments) < 2:
+        return segments
+
+    result: list[dict[str, Any]] = []
+    i = 0
+    n = len(segments)
+    while i < n:
+        if (
+            i + 1 < n
+            and segments[i]["speaker"] != segments[i + 1]["speaker"]
+            and segments[i + 1].get("start", 0) < segments[i].get("end", 0) - tolerance
+        ):
+            cluster: list[dict[str, Any]] = [segments[i], segments[i + 1]]
+            cluster_start = segments[i].get("start", 0)
+            cluster_max_end = max(
+                segments[i].get("end", 0), segments[i + 1].get("end", 0)
+            )
+            j = i + 2
+            while j < n:
+                prev = cluster[-1]
+                nxt = segments[j]
+                if nxt.get("start", 0) >= prev.get("end", 0) - tolerance:
+                    break  # natural pause — close cluster
+                if len(cluster) >= max_cluster_segments:
+                    break
+                if nxt.get("end", 0) - cluster_start > max_cluster_seconds:
+                    break
+                cluster.append(nxt)
+                cluster_max_end = max(cluster_max_end, nxt.get("end", 0))
+                j += 1
+
+            speaker_order: list[str] = []
+            grouped: dict[str, list[dict[str, Any]]] = {}
+            for seg in cluster:
+                sp = seg["speaker"]
+                if sp not in grouped:
+                    grouped[sp] = []
+                    speaker_order.append(sp)
+                grouped[sp].append(seg)
+
+            speaker_order.sort(key=lambda sp: min(s.get("start", 0) for s in grouped[sp]))
+
+            for sp in speaker_order:
+                segs = grouped[sp]
+                merged = {
+                    "speaker": sp,
+                    "start": min(s.get("start", 0) for s in segs),
+                    "end": max(s.get("end", 0) for s in segs),
+                    "text": "".join(s.get("text", "") for s in segs),
+                }
+                result.append(merged)
+
+            i = j
+        else:
+            result.append(segments[i])
+            i += 1
 
     return result
 
@@ -348,6 +439,11 @@ def main() -> None:
     )
     parser.add_argument("--out", help="Output markdown file path (required unless --samples)")
     parser.add_argument("--blacklist", help="Extra blacklist file (one phrase per line)")
+    parser.add_argument(
+        "--no-reconstruct-overlaps",
+        action="store_true",
+        help="Disable overlap reconstruction (default: on)",
+    )
 
     # Header metadata flags
     parser.add_argument("--source", default="", help="Source audio file path")
@@ -372,7 +468,9 @@ def main() -> None:
     if not args.out:
         _die("--out is required when not using --samples mode")
 
-    # Smooth cross-talk → merge same speaker
+    # Reconstruct overlapping speech → smooth cross-talk → merge same speaker
+    if not args.no_reconstruct_overlaps:
+        segments = _reconstruct_overlaps(segments)
     segments = _smooth_crosstalk(segments)
     segments = _merge_same_speaker(segments)
 
