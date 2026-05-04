@@ -157,9 +157,9 @@ When the CLI exits non-zero, the first stderr line is `Error [<category>]: <mess
 
 **Default agent behaviour on any non-zero exit** — do not silently retry, fall back to a different model, or skip the step. Surface the `Error [<category>]:` line plus the `Details:` line to the user, then ask exactly:
 
-> "The transcribe step failed with `<category>`: \"<one-line summary>\". Should I wait while you fix it (then retry the same command), or cancel the transcription job?"
+> "The transcribe step failed with `<category>`: \"<one-line summary>\". Should I wait while you fix it (then retry, possibly with adjusted parameters), or cancel the transcription job?"
 
-On **wait**: pause for the user to say "go", then re-run the exact same `uv run --script ...` invocation. On **cancel**: report the failure clearly and stop the job.
+On **wait**: pause for the user to say "go", then re-run the `uv run --script ...` invocation — adjusting parameters (e.g. model name on code 11) only as the user specified, otherwise unchanged. On **cancel**: report the failure clearly and stop the job.
 
 ## Anti-patterns
 
