@@ -53,7 +53,8 @@ def _check_runner() -> None:
             "openai is not installed in the current environment.\n"
             "  Run via uv (recommended):  "
             "uv run --script .claude/skills/transcribe/scripts/transcribe_diarize.py ...\n"
-            "  Or install manually:       uv pip install openai python-dotenv"
+            "  If uv cannot resolve dependencies, surface the full uv error — "
+            "do not work around it with manual pip installs."
         )
 
 
@@ -177,7 +178,10 @@ def _create_client():
     try:
         from openai import OpenAI
     except ImportError:
-        _die("openai SDK not installed. Install with `uv pip install openai`.")
+        _die(
+            "openai SDK not importable. Run this script via "
+            "`uv run --script` so PEP 723 metadata resolves the dep automatically."
+        )
     return OpenAI()
 
 
