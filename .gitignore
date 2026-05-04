@@ -3,3 +3,4 @@ docs/
 .ruff_cache/
 inbox/
 outbox/tmp/
+skills/convert/eval/report.json

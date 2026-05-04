@@ -1,0 +1,156 @@
+[
+  {
+    "id": "t01-direct-transcribe",
+    "query": "transcribe this meeting recording at ~/Downloads/team-sync-20260501.m4a",
+    "should_trigger": true,
+    "split": "train",
+    "notes": "Direct explicit request with file path"
+  },
+  {
+    "id": "t02-client-call-casual",
+    "query": "I had a call with my client yesterday, recorded it on my phone. can you turn it into text? file is on my desktop client-call.m4a",
+    "should_trigger": true,
+    "split": "train",
+    "notes": "Casual phrasing, indirect — 'turn it into text' not 'transcribe'"
+  },
+  {
+    "id": "t03-what-did-we-discuss",
+    "query": "what did we talk about in this call? here's the recording meetings/standup.mp4",
+    "should_trigger": true,
+    "split": "train",
+    "notes": "Intent-based — doesn't say transcribe, wants content from a recording"
+  },
+  {
+    "id": "t04-voice-memo",
+    "query": "hey can u transcribe this voice memo I left for myself ~/voice-notes/ideas.m4a",
+    "should_trigger": true,
+    "split": "train",
+    "notes": "Voice note, casual spelling, personal use"
+  },
+  {
+    "id": "t05-interview-writeup",
+    "query": "I just finished interviewing a candidate, need to write up the notes. Recording is at interviews/john-doe-2026-05-02.mp3",
+    "should_trigger": true,
+    "split": "train",
+    "notes": "Interview context — 'write up the notes' is indirect"
+  },
+  {
+    "id": "t06-multi-speaker-labels",
+    "query": "this is a recording of our architecture review with 3 people, need speaker labels. file: inbox/arch-review.m4a",
+    "should_trigger": true,
+    "split": "train",
+    "notes": "Explicit diarization need, mentions speaker count"
+  },
+  {
+    "id": "t07-terse-process",
+    "query": "process this recording inbox/weekly-sync.mp4",
+    "should_trigger": true,
+    "split": "validation",
+    "notes": "Minimal prompt — just 'process this recording'"
+  },
+  {
+    "id": "t08-non-english-russian",
+    "query": "у меня есть запись звонка с клиентом, нужна расшифровка. файл call-recording.m4a",
+    "should_trigger": true,
+    "split": "validation",
+    "notes": "Non-English request (Russian) — 'need a transcript of a client call'"
+  },
+  {
+    "id": "t09-screenshare-complex",
+    "query": "I've got a 45-minute screen share recording from our product review meeting. Need a transcript and also want screenshots of the UI mockups that were shown. The file is at ~/recordings/product-review-20260503.mp4",
+    "should_trigger": true,
+    "split": "validation",
+    "notes": "Complex multi-step: transcript + screenshots, detailed context"
+  },
+  {
+    "id": "t10-summary-for-manager",
+    "query": "can you make meeting notes from this? my manager wants a summary of what we decided. recording is sprint-retro.m4a",
+    "should_trigger": true,
+    "split": "validation",
+    "notes": "Summary/notes request — doesn't say 'transcribe' at all"
+  },
+  {
+    "id": "t11-conference-recording",
+    "query": "we recorded the all-hands presentation, its about 2 hours. can you get me a transcript with timestamps? path is /shared/recordings/allhands-q2.mp4",
+    "should_trigger": true,
+    "split": "train",
+    "notes": "Long conference recording, explicit timestamp request"
+  },
+  {
+    "id": "t12-whatsapp-voice",
+    "query": "someone sent me a whatsapp voice message and I can't listen rn, can you tell me what they said? exported it to ~/Downloads/PTT-20260504-WA0012.opus",
+    "should_trigger": true,
+    "split": "validation",
+    "notes": "Unusual format (.opus), informal, 'tell me what they said'"
+  },
+  {
+    "id": "n01-edit-existing-transcript",
+    "query": "I have a transcript.md that needs some formatting fixes — speaker names are wrong and timestamps are off. can you clean it up?",
+    "should_trigger": false,
+    "split": "train",
+    "notes": "Near-miss: involves 'transcript' but task is editing text, not processing audio"
+  },
+  {
+    "id": "n02-convert-format",
+    "query": "convert this mp4 to mp3 for me, I just need the audio track",
+    "should_trigger": false,
+    "split": "train",
+    "notes": "Near-miss: audio/video file, but task is format conversion not transcription"
+  },
+  {
+    "id": "n03-write-meeting-agenda",
+    "query": "help me write an agenda for tomorrow's team meeting, we need to cover sprint planning and the Q3 roadmap",
+    "should_trigger": false,
+    "split": "train",
+    "notes": "Near-miss: 'meeting' keyword but task is authoring, not processing a recording"
+  },
+  {
+    "id": "n04-probe-audio-format",
+    "query": "what format is this audio file? tell me the codec, bitrate, and duration — ~/music/track.m4a",
+    "should_trigger": false,
+    "split": "train",
+    "notes": "Near-miss: audio file with .m4a extension, but wants metadata not transcription"
+  },
+  {
+    "id": "n05-podcast-editing",
+    "query": "I need to cut the first 30 seconds of dead air from this podcast episode and fade in the intro music",
+    "should_trigger": false,
+    "split": "train",
+    "notes": "Near-miss: audio editing, involves a recording but no transcription intent"
+  },
+  {
+    "id": "n06-live-captions",
+    "query": "is there a way to get live captions during my zoom call tomorrow?",
+    "should_trigger": false,
+    "split": "validation",
+    "notes": "Near-miss: real-time transcription, not post-hoc processing of a file"
+  },
+  {
+    "id": "n07-summarize-pdf",
+    "query": "can you summarize this document for me? it's a long PDF report about Q1 financials at ~/Documents/q1-report.pdf",
+    "should_trigger": false,
+    "split": "validation",
+    "notes": "Near-miss: 'summarize' keyword but input is a PDF, not audio/video"
+  },
+  {
+    "id": "n08-recording-setup",
+    "query": "what's the best free tool to record my screen and microphone during meetings on macOS?",
+    "should_trigger": false,
+    "split": "validation",
+    "notes": "Near-miss: 'record' + 'meetings' but asking for tool recommendations, no file to process"
+  },
+  {
+    "id": "n09-add-subtitles-video",
+    "query": "I need to hardcode subtitles into this video so my deaf colleague can watch it — already have the .srt file, just need to burn it in",
+    "should_trigger": false,
+    "split": "validation",
+    "notes": "Near-miss: video + subtitles, but task is video rendering not transcription"
+  },
+  {
+    "id": "n10-audio-quality-check",
+    "query": "can you check the audio levels in this recording and tell me if the quality is good enough for a podcast? file is episode-draft.wav",
+    "should_trigger": false,
+    "split": "train",
+    "notes": "Near-miss: 'recording' keyword, audio file, but wants QA not transcription"
+  }
+]
