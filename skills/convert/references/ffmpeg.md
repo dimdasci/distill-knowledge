@@ -2,6 +2,24 @@
 
 Scope: only the invocations used by the `convert` skill. Each section gives one canonical command, what its non-obvious flags do, and when to deviate.
 
+## Installation
+
+Detect first:
+```bash
+command -v ffmpeg >/dev/null && command -v ffprobe >/dev/null && ffmpeg -version | head -1
+```
+
+If missing, install per OS:
+
+| OS | Command |
+|---|---|
+| macOS + Homebrew | `brew install ffmpeg` |
+| macOS, no Homebrew | Install Homebrew first: `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"` then `brew install ffmpeg` |
+| Debian / Ubuntu | `sudo apt-get update && sudo apt-get install -y ffmpeg` |
+| Fedora / RHEL | `sudo dnf install -y ffmpeg` |
+| Arch | `sudo pacman -S --noconfirm ffmpeg` |
+| Windows / other | Manual: https://ffmpeg.org/download.html |
+
 ## Probe metadata
 
 ```bash

@@ -6,7 +6,7 @@
 """Render diarized JSON to clean markdown transcript.
 
 Run with:
-    uv run --script .claude/skills/convert/scripts/render_transcript.py \\
+    uv run --script skills/convert/scripts/render_transcript.py \\
         <diarized.json> [flags]
 
 Modes:

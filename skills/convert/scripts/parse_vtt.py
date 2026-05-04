@@ -5,7 +5,7 @@
 # ///
 """Parse WebVTT transcript files into structured JSON for meeting analysis.
 
-Run with: uv run --script .claude/skills/convert/scripts/parse_vtt.py <file.vtt>
+Run with: uv run --script skills/convert/scripts/parse_vtt.py <file.vtt>
 """
 
 from __future__ import annotations

@@ -5,11 +5,14 @@ description: >-
   path the user names) needs to be turned into a transcript or knowledge
   markdown — covers transcription with speaker labels, screenshot extraction
   from screen-share, and optional splitting into topic articles.
+compatibility: Requires uv, ffmpeg, ffprobe, Python ≥3.10, and OPENAI_API_KEY (network access to OpenAI API)
 ---
 
 # Convert Meeting Recording → Knowledge Markdown
 
-Always emit `outbox/{meeting-slug}/transcript.md`; screenshots inline when useful; `summary.md` + `topics/{slug}.md` only on request. `{meeting-slug}` = `kebab-case-topic-YYYYMMDD`. Never touch `inbox/` or `knowledge/`. Steps, shapes, prompts: `references/output-templates.md`. ffmpeg: `references/ffmpeg.md`. Transcribe API: `references/transcribe-api.md`. CLI examples: `references/transcribe-cli.md`.
+Always emit `outbox/{meeting-slug}/transcript.md`; screenshots inline when useful; `summary.md` + `topics/{slug}.md` only on request. `{meeting-slug}` = `kebab-case-topic-YYYYMMDD`. Never touch `inbox/` or `knowledge/`.
+
+References (load on demand): [output templates](references/output-templates.md) · [ffmpeg](references/ffmpeg.md) · [transcribe API](references/transcribe-api.md) · [transcribe CLI](references/transcribe-cli.md).
 
 ## Setup
 
@@ -23,13 +26,7 @@ Scripts run via [`uv`](https://docs.astral.sh/uv/) (PEP 723, no venv).
    Prints version → continue. Else **do not auto-install**; ask:
    > "ffmpeg required, not on PATH. Install for you, or yourself? (**auto** / **manual**)"
 
-   **auto** — detect OS, confirm, run matching install, re-run detect, proceed only on success:
-   - macOS + `brew`: `brew install ffmpeg`
-   - macOS, no `brew`: install Homebrew (`/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`) then `brew install ffmpeg`
-   - Debian/Ubuntu: `sudo apt-get update && sudo apt-get install -y ffmpeg`
-   - Fedora/RHEL: `sudo dnf install -y ffmpeg`
-   - Arch: `sudo pacman -S --noconfirm ffmpeg`
-   - Windows / ambiguous → **manual**
+   **auto** — detect OS, confirm, run matching install, re-run detect, proceed only on success. See [ffmpeg reference](references/ffmpeg.md) for per-OS commands.
 
    **manual** — https://ffmpeg.org/download.html; on "done", re-run detect.
 3. **`OPENAI_API_KEY`** (for transcription): read from process env, else from project `.env`. Either `export OPENAI_API_KEY=sk-...` (wins) or `cp .env.example .env` and paste (gitignored). Key at https://platform.openai.com/api-keys. Never paste in chat; never commit `.env`.
@@ -53,55 +50,21 @@ Record answers. Use sensible defaults if the user skips a field, but **never sil
 | speakers | drives model choice + sample step | confirms no diarize needed |
 | topic + terms | markdown header; sanity-check after | passed via `--prompt` |
 
-### Steps 1–9
+### Steps 1–10
 
 1. **Inventory + probe** inbox media + VTT.
 2. **Gate 1** — findings, preprocessing plan, `{meeting-slug}`.
-3. **Preprocess** what Gate 1 approved (convert, audio extract, VTT parse, re-transcribe + diarize, screen probe). Re-transcription uses `scripts/transcribe_diarize.py`; on non-zero exit follow [Error handling](#error-handling), surface verbatim, **wait before retrying**, never fall back silently.
+3. **Preprocess** what Gate 1 approved (convert, audio extract, VTT parse, re-transcribe + diarize, screen probe). Re-transcription uses [scripts/transcribe_diarize.py](scripts/transcribe_diarize.py); on non-zero exit follow [Error handling](#error-handling), surface verbatim, **wait before retrying**, never fall back silently. See [transcribe CLI](references/transcribe-cli.md) for full command examples.
 4. **Speaker labelling** (after diarized transcription, before cleaned transcript):
-   1. Run `render_transcript.py --samples <json>` — show the user the longest 1–2 substantive segments per detected speaker.
+   1. Run [scripts/render_transcript.py](scripts/render_transcript.py) `--samples <json>` — show the user the longest 1–2 substantive segments per detected speaker.
    2. User names speakers (or confirms `A`/`B`/`C` if no preference).
-   3. Run `render_transcript.py <json> --speakers A=Name1,B=Name2 --out outbox/{meeting-slug}/transcript.md` — emits the cleaned transcript with speaker labels, dropping hallucinations and empty turns.
+   3. Run [scripts/render_transcript.py](scripts/render_transcript.py) `<json> --speakers A=Name1,B=Name2 --out outbox/{meeting-slug}/transcript.md` — emits the cleaned transcript with speaker labels, dropping hallucinations and empty turns.
 5. **Cleaned transcript (mandatory)** — produced by step 4.3 above. Cue: `**Alice** [0:00:12]: ...`. Faithful, never paraphrased.
 6. **Screenshots inline** — skip if no screen content; else `timestamp + 2 s`, `-q:v 2`, inline at cue.
 7. **Gate 2** — structured docs or transcript only?
 8. **Plan structure** — topics, decisions, actions, open questions, pain points, proposals.
 9. **Gate 3 + emit** `summary.md`, `topics/{slug}.md` (default/process), Mermaid for flow/decision shots.
 10. **Report** + stop.
-
-## Transcription commands
-
-**Re-transcription with diarization:**
-1. Extract audio if needed: `ffmpeg -i video.mp4 -vn -acodec libmp3lame -q:a 2 tmp/audio.mp3` (see `references/ffmpeg.md` for size-reduction ladder).
-2. Run:
-   ```bash
-   uv run --script .claude/skills/convert/scripts/transcribe_diarize.py \
-     tmp/audio.mp3 \
-     --model gpt-4o-transcribe-diarize \
-     --response-format diarized_json \
-     --language {lang from intake} \
-     --out-dir tmp/transcribe/{meeting-slug}
-   ```
-   Add `--known-speaker "Name=path/to/sample.wav"` per known speaker (max 4).
-
-**Rendering diarized JSON → markdown:**
-```bash
-# Step 1: show speaker samples for labelling
-uv run --script .claude/skills/convert/scripts/render_transcript.py \
-  tmp/transcribe/{meeting-slug}/audio.transcript.json \
-  --samples
-
-# Step 2: render with labels
-uv run --script .claude/skills/convert/scripts/render_transcript.py \
-  tmp/transcribe/{meeting-slug}/audio.transcript.json \
-  --speakers "A=Dima,B=Mark" \
-  --source "inbox/{original-file}" \
-  --model "gpt-4o-transcribe-diarize" \
-  --language "{lang}" \
-  --topic "{topic from intake}" \
-  --terms "{terms from intake}" \
-  --out outbox/{meeting-slug}/transcript.md
-```
 
 ## Decision rules
 
@@ -143,7 +106,7 @@ CLI exits non-zero with stderr `Error [<category>]: <message>`. SDK already retr
 
 > "The transcribe step failed with `<category>`: \"<one-line summary>\". Should I wait while you fix it (then retry, possibly with adjusted parameters), or cancel the transcription job?"
 
-**wait**: pause until "go", re-run same `uv run --script ...` (adjust only what user said). **cancel**: report, stop.
+**wait**: pause until "go", re-run same command (adjust only what user said). **cancel**: report, stop.
 
 ## Anti-patterns
 
@@ -156,7 +119,7 @@ CLI exits non-zero with stderr `Error [<category>]: <message>`. SDK already retr
 - **Don't fabricate screen content.** Unclear → mark it.
 - **Don't run the next skill.** Stop after Step 10.
 - **Don't transcribe before intake** (language / speakers / topic / terms).
-- **Don't write ad-hoc renderers** (jq / sed / awk / inline scripts) — use `render_transcript.py`.
+- **Don't write ad-hoc renderers** (jq / sed / awk / inline scripts) — use [scripts/render_transcript.py](scripts/render_transcript.py).
 - **Don't paste the API key in chat or commit it.**
 - **Don't request `diarized_json` from a non-diarize model** — rejected.
 - **Don't pass `--prompt` to the diarize model** — unsupported.

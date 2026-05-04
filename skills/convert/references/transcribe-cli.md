@@ -1,11 +1,11 @@
 # CLI examples
 
-The script lives at `.claude/skills/convert/scripts/transcribe_diarize.py`, relative to the project root. Always invoke with `uv run --script` (the script declares its deps via PEP 723). Run with `--help` for the full flag list.
+The script lives at `scripts/transcribe_diarize.py` (relative to the skill root). Always invoke with `uv run --script` (the script declares its deps via PEP 723). Run with `--help` for the full flag list.
 
 ## Single file, fast text
 
 ```bash
-uv run --script .claude/skills/convert/scripts/transcribe_diarize.py \
+uv run --script scripts/transcribe_diarize.py \
   path/to/audio.wav \
   --out transcript.txt
 ```
@@ -13,7 +13,7 @@ uv run --script .claude/skills/convert/scripts/transcribe_diarize.py \
 ## Diarization with known speakers
 
 ```bash
-uv run --script .claude/skills/convert/scripts/transcribe_diarize.py \
+uv run --script scripts/transcribe_diarize.py \
   meeting.m4a \
   --model gpt-4o-transcribe-diarize \
   --response-format diarized_json \
@@ -25,7 +25,7 @@ uv run --script .claude/skills/convert/scripts/transcribe_diarize.py \
 ## Plain text with language hint
 
 ```bash
-uv run --script .claude/skills/convert/scripts/transcribe_diarize.py \
+uv run --script scripts/transcribe_diarize.py \
   interview.mp3 \
   --response-format text \
   --language en \
@@ -35,14 +35,14 @@ uv run --script .claude/skills/convert/scripts/transcribe_diarize.py \
 ## Dry run (validate args + print payload, no API call)
 
 ```bash
-uv run --script .claude/skills/convert/scripts/transcribe_diarize.py \
+uv run --script scripts/transcribe_diarize.py \
   audio.wav --dry-run
 ```
 
 ## Calling from another skill (diarized JSON for downstream processing)
 
 ```bash
-uv run --script .claude/skills/convert/scripts/transcribe_diarize.py \
+uv run --script scripts/transcribe_diarize.py \
   "$AUDIO" \
   --model gpt-4o-transcribe-diarize \
   --response-format diarized_json \
@@ -61,7 +61,7 @@ The diarized JSON has its own `segments[]` schema — do not pipe it through `pa
 
 ```bash
 uv --version                                              # uv installed?
-uv run --script .claude/skills/convert/scripts/transcribe_diarize.py --help  # deps resolve?
+uv run --script scripts/transcribe_diarize.py --help  # deps resolve?
 ```
 
 If `uv --version` fails → run Setup. If `--help` fails with `openai not installed`, surface verbatim — do not `pip install` manually; that defeats PEP 723.

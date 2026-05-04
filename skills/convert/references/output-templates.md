@@ -26,7 +26,7 @@ ffmpeg -i input.mov -c:v libx264 -crf 20 -c:a aac -b:a 160k tmp/video.mp4
 
 **VTT parsing** (Zoom-tuned `Speaker Name: text`):
 ```bash
-uv run --script .claude/skills/convert/scripts/parse_vtt.py \
+uv run --script scripts/parse_vtt.py \
   inbox/{meeting-folder}/meeting.vtt --pretty -o tmp/transcript_parsed.json
 ```
 Read `metadata` + `screen_references` first; `cues` in chunks. Teams / Google Meet / non-English: detection won't fire — read VTT directly.
@@ -36,7 +36,7 @@ Read `metadata` + `screen_references` first; `cues` in chunks. Teams / Google Me
 2. Extract audio if needed: `ffmpeg -i video.mp4 -vn -acodec libmp3lame -q:a 2 tmp/audio.mp3`.
 3. Run:
    ```bash
-   uv run --script .claude/skills/convert/scripts/transcribe_diarize.py \
+   uv run --script scripts/transcribe_diarize.py \
      tmp/audio.mp3 \
      --model gpt-4o-transcribe-diarize \
      --response-format diarized_json \
@@ -49,13 +49,13 @@ Read `metadata` + `screen_references` first; `cues` in chunks. Teams / Google Me
 **Speaker labelling + cleaned transcript (after diarization):**
 1. Show speaker samples:
    ```bash
-   uv run --script .claude/skills/convert/scripts/render_transcript.py \
+   uv run --script scripts/render_transcript.py \
      tmp/transcribe/{meeting-slug}/audio.transcript.json --samples
    ```
 2. User names speakers (or confirms raw labels).
 3. Render final transcript:
    ```bash
-   uv run --script .claude/skills/convert/scripts/render_transcript.py \
+   uv run --script scripts/render_transcript.py \
      tmp/transcribe/{meeting-slug}/audio.transcript.json \
      --speakers "A=Name1,B=Name2" \
      --source "inbox/{original-file}" \
