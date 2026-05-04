@@ -1,10 +1,13 @@
 ---
 name: convert
 description: >-
-  Use when a meeting/audio/video recording (a file in inbox/ or any direct file
-  path the user names) needs to be turned into a transcript or knowledge
-  markdown — covers transcription with speaker labels, screenshot extraction
-  from screen-share, and optional splitting into topic articles.
+  Transcribe and extract knowledge from audio or video recordings — meetings,
+  interviews, calls, voice notes, conference recordings. Produces a clean,
+  speaker-labeled transcript and optionally structured topic documents with
+  screenshots from screen-share. Use when the user has a recording and wants
+  a transcript, meeting notes, speaker attribution, or a written summary of
+  what was discussed — even if they just say "process this recording" or
+  "what did we talk about in this call."
 compatibility: Requires uv, ffmpeg, ffprobe, Python ≥3.10, and OPENAI_API_KEY (network access to OpenAI API)
 ---
 
