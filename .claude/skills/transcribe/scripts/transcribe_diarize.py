@@ -20,7 +20,7 @@ import mimetypes
 import os
 from pathlib import Path
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NoReturn, Optional, Tuple
 
 
 def _load_dotenv_quietly() -> None:
@@ -43,7 +43,7 @@ _load_dotenv_quietly()
 
 def _check_runner() -> None:
     """Warn if the script was run without uv — deps may be missing."""
-    if "UV_TOOL_DIR" in os.environ or "VIRTUAL_ENV" in os.environ:
+    if "VIRTUAL_ENV" in os.environ:
         return
     # If openai was importable above we're fine; this is a soft hint.
     try:
@@ -66,7 +66,7 @@ MAX_KNOWN_SPEAKERS = 4
 ALLOWED_RESPONSE_FORMATS = {"text", "json", "diarized_json"}
 
 
-def _die(message: str, code: int = 1) -> None:
+def _die(message: str, code: int = 1) -> NoReturn:
     print(f"Error: {message}", file=sys.stderr)
     raise SystemExit(code)
 
@@ -220,7 +220,7 @@ def _build_payload(
     return payload
 
 
-def _die_api(category: str, exit_code: int, message: str) -> None:
+def _die_api(category: str, exit_code: int, message: str) -> NoReturn:
     """Exit with a category-tagged error. Tag is read by the calling skill."""
     print(f"Error [{category}]: {message}", file=sys.stderr)
     raise SystemExit(exit_code)
