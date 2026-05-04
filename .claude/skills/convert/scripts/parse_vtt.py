@@ -15,6 +15,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 TIMESTAMP_RE = re.compile(r"(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})")
 SPEAKER_RE = re.compile(r"^(.+?):\s+(.+)$")
@@ -55,7 +56,7 @@ def parse_speaker(line: str) -> tuple[str, str]:
     return (m.group(1).strip(), m.group(2).strip()) if m else ("Unknown", line.strip())
 
 
-def _die(msg: str, code: int = 1) -> None:
+def _die(msg: str, code: int = 1) -> NoReturn:
     print(f"Error: {msg}", file=sys.stderr)
     raise SystemExit(code)
 
@@ -68,8 +69,7 @@ def _check_input(vtt_path: str) -> Path:
         _die(f"VTT path is not a file: {path}")
     if path.suffix.lower() not in {".vtt", ".webvtt", ".txt"}:
         print(
-            f"Warning: unexpected extension {path.suffix!r}; "
-            "proceeding anyway.",
+            f"Warning: unexpected extension {path.suffix!r}; proceeding anyway.",
             file=sys.stderr,
         )
     return path
@@ -81,8 +81,7 @@ def parse_vtt(filepath: str) -> dict:
         with open(filepath, "r", encoding="utf-8") as f:
             lines = f.read().splitlines()
     except (OSError, UnicodeDecodeError) as e:
-        print(f"Error reading file: {e}", file=sys.stderr)
-        sys.exit(1)
+        _die(f"reading file: {e}")
 
     # Find WEBVTT header
     start = 0
