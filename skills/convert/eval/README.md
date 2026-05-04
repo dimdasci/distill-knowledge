@@ -59,7 +59,9 @@ Every negative query shares keywords or concepts with the skill but needs someth
 ./run-trigger-eval.sh --runs 5 --threshold 0.6
 ```
 
-Requires `claude` (Claude Code CLI) and `jq`.
+Requires `claude` (Claude Code CLI ≥2.1) and `jq`.
+
+The script uses `claude -p <query> --output-format stream-json --verbose` and checks the event stream for `Skill` tool_use calls matching the skill name.
 
 ## Output
 

@@ -71,11 +71,16 @@ echo ""
 # --- check if skill triggered -----------------------------------------------
 check_triggered() {
   local query="$1"
-  # Run claude in pipe mode with JSON output; look for a Skill tool_use call
-  # matching our skill name.
-  claude -p "$query" --output-format json 2>/dev/null \
-    | jq -e --arg skill "$SKILL_NAME" \
-      'any(.messages[].content[]?; .type == "tool_use" and .name == "Skill" and .input.skill == $skill)' \
+  # Run claude in pipe mode with stream-json (verbose) output.
+  # Each line is a JSON event. Look for an assistant message containing a
+  # Skill tool_use call matching our skill name.
+  claude -p "$query" --output-format stream-json --verbose 2>/dev/null \
+    | jq -e --slurp --arg skill "$SKILL_NAME" \
+      'any(.[]; .type == "assistant" and
+        (.message.content // [] | any(
+          .type == "tool_use" and .name == "Skill" and .input.skill == $skill
+        ))
+      )' \
       > /dev/null 2>&1
 }
 
