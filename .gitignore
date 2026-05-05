@@ -10,3 +10,4 @@ skills/convert/scripts/tests/probe_*.py
 skills/convert/scripts/tests/explore_*.py
 tmp/
 skills/convert/scripts/__pycache__/
+__pycache__/
