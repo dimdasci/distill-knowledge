@@ -14,7 +14,7 @@ uv run --script scripts/prep_audio.py <input> --out-dir <dir> [options]
 |---|---|---|
 | `<input>` | yes | Audio (`.m4a`, `.mp3`, `.wav`, `.ogg`, `.opus`, `.flac`) or video (`.mp4`, `.mov`, `.mkv`, `.webm`) file |
 | `--out-dir` | yes | Output directory (created if needed) |
-| `--max-chunk` | no | Max chunk duration in seconds (default: 1080 = 18 min) |
+| `--max-chunk` | no | Max chunk duration in seconds (default: 480 = 8 min) |
 | `--overlap` | no | Overlap between chunks in seconds (default: 30 for diarize; use 5 for single-speaker) |
 | `--no-split` | no | Force single output even if stripped duration exceeds max-chunk |
 
@@ -69,7 +69,7 @@ uv run --script scripts/prep_audio.py \
 - **No speed adjustment** unless an explicit user flag is added later.
 - **Video input:** audio track extracted via `-vn` in the re-encode pass. The source video is unmodified and retained for Step 6 screenshots.
 - **Split trigger:** stripped duration > `--max-chunk` → `n = ceil(duration / max_chunk)`, target = `duration / n`. Each ideal split point snaps to the nearest silence within ±60s.
-- **Chunk arithmetic:** 17 min → 1 chunk; 22 min → 2× ~11 min; 45 min → 3× ~15 min.
+- **Chunk arithmetic:** 7 min → 1 chunk; 12 min → 2× ~6 min; 30 min → 4× ~7.5 min.
 
 ## manifest.json schema
 
@@ -82,7 +82,7 @@ uv run --script scripts/prep_audio.py \
   "silence_stripped": {"leading_s": 1.2, "trailing_s": 1.3},
   "split": true,
   "n_chunks": 2,
-  "max_chunk_s": 1080,
+  "max_chunk_s": 480,
   "overlap_s": 30,
   "chunks": [
     {

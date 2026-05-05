@@ -55,7 +55,7 @@ The diarized JSON has its own `segments[]` schema — do not pipe it through `pa
 
 - `text`: plain UTF-8 transcript, no timestamps.
 - `json`: `{"text": "..."}` plus model metadata.
-- `diarized_json`: `segments[]` with `speaker`, `start`, `end`, `text` fields. Use this whenever speaker attribution matters (e.g. when feeding the `convert` skill).
+- `diarized_json`: `segments[]` with `speaker`, `start`, `end`, `text` fields. Use for the diarize fallback path (no VTT, multi-speaker).
 
 ## Prompt-hallucination warning
 
@@ -76,12 +76,13 @@ The model uses prompt content as a fallback distribution during low-confidence a
 
 - **Vocabulary list + 1-line topic only.** No paragraph summaries, no lists of every participant, no example phrases of "what was likely said".
 - **Names are dangerous.** If you list 7 people in the prompt, expect 1–2 to appear in fabricated turns. Limit to the 2–3 main speakers.
-- **Run a verification pass against a parallel diarize transcription** (the [two-pass flow](chunked-transcription.md#two-pass-text-quality-flow)). The agent's cleanup pass drops sentences that introduce concepts absent from the diarize signal — fabrications are detectable because they don't appear on both sides.
-- **Never use a prompt-only single-pass run as the final transcript.** Always merge against an unprompted source.
+- **When using VTT-aligned path:** fabrications are detectable because they have no matching VTT cue at that timestamp. The agent's alignment pass drops sentences with no VTT anchor.
+- **When using diarize fallback without VTT:** fabrications are harder to detect. Use minimal prompts and verify suspicious turns against audio via [extract_clip.py](../scripts/extract_clip.py).
+- **Never use a prompt-only single-pass run as the final transcript** without cross-checking against VTT or diarize output.
 
 ### Diarize model rejects `--prompt`
 
-The diarize model (`gpt-4o-transcribe-diarize`) rejects `--prompt` at the API level. This is a constraint, not a workaround opportunity — there is no "diarize + prompted text" single call. For prompted-text quality with speaker labels, use the two-pass flow.
+The diarize model (`gpt-4o-transcribe-diarize`) rejects `--prompt` at the API level. This is a constraint, not a workaround opportunity — there is no "diarize + prompted text" single call. For prompted-text quality with speaker labels, use the VTT-aligned path (VTT provides speakers, transcribe provides text).
 
 ## Preflight
 

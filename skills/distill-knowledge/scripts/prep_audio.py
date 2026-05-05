@@ -115,8 +115,8 @@ def main() -> None:
     parser.add_argument("input", help="Input audio or video file")
     parser.add_argument("--out-dir", required=True, help="Output directory")
     parser.add_argument(
-        "--max-chunk", type=float, default=1080.0,
-        help="Max chunk duration in seconds (default: 1080 = 18 min)",
+        "--max-chunk", type=float, default=480.0,
+        help="Max chunk duration in seconds (default: 480 = 8 min),
     )
     parser.add_argument(
         "--overlap", type=float, default=30.0,
@@ -124,7 +124,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--no-split", action="store_true",
-        help="Force single output even if >18 min",
+        help="Force single output even if >8 min",
     )
 
     args = parser.parse_args()

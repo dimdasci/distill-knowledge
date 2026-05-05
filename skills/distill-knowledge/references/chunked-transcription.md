@@ -2,247 +2,222 @@
 
 ## Overview
 
-When `prep_audio.py` splits a recording into chunks (stripped duration > 18 min), the pipeline becomes:
+Three transcription paths exist. The first two use `gpt-4o-transcribe` (reliable); the third uses diarization (fallback, unstable).
 
-1. `prep_audio.py` → `stripped.ogg` + `chunks/*.ogg` + `manifest.json`
-2. Per-chunk loop: `transcribe_diarize.py --manifest` (agent reports progress between chunks)
+| Path | When | Pipeline |
+|------|------|----------|
+| **VTT-aligned** | VTT exists, text quality is bad | VTT skeleton + transcribe chunks → agent aligns |
+| **Single-speaker** | No VTT, 1 speaker | Transcribe chunks directly |
+| **Diarize fallback** | No VTT, multi-speaker | Diarize at 8-min chunks → merge → cleanup |
+
+When `prep_audio.py` splits a recording (stripped duration > 8 min), it produces `stripped.ogg` + `chunks/*.ogg` + `manifest.json`.
+
+## VTT-aligned merge
+
+**Primary path for retranscription.** The VTT provides structure (speakers, timestamps, turn boundaries); `gpt-4o-transcribe` provides clean text. The agent merges them.
+
+### Pipeline
+
+1. `parse_vtt.py <file.vtt> -o tmp/prep/<slug>/vtt_cues.json`
+2. `prep_audio.py <input> --out-dir tmp/prep/<slug>` → `stripped.ogg` + chunks + `manifest.json`
+3. Per-chunk transcription (text only, no diarize):
+   ```bash
+   uv run --script scripts/transcribe_diarize.py \
+     tmp/prep/<slug>/chunks/chunk_00.ogg \
+     --model gpt-4o-transcribe --response-format text \
+     --language <lang> \
+     --prompt "Terms: <terms>. Topic: <topic>." \
+     --manifest tmp/prep/<slug>/manifest.json \
+     --chunk-index 0 --out-dir tmp/prep/<slug>/transcripts
+   ```
+4. Concatenate chunk transcripts into `clean_full.txt`
+5. **Agent aligns** clean text to VTT structure → `polished.json`
+6. `render_transcript.py polished.json --speakers ... --out outbox/<slug>/transcript.md`
+
+### VTT-aligned merge (Step 5 — language work)
+
+**This is language work you perform directly. Not a Python script.**
+
+Inputs:
+- `vtt_cues.json` — speaker labels + timestamps + low-quality text (positional guide)
+- `clean_full.txt` — high-quality continuous text from `gpt-4o-transcribe` (no speakers, no timestamps)
+
+What you do in one pass:
+
+1. **Map clean text onto VTT turns.** Use VTT text as a positional guide — find where each VTT cue's content appears in the clean text. The VTT text is garbled but close enough to locate the corresponding clean passage.
+2. **Preserve VTT speaker labels.** The clean text has no speaker info — all attribution comes from VTT.
+3. **Preserve VTT timestamps.** Use VTT `start_seconds`/`end_seconds` for each turn.
+4. **Repair where clean text is better.** When the VTT says "Артагамария" and the clean text says "architecture", use the clean text. This is the whole point.
+5. **Drop fabrications from clean text.** Prompted transcription may invent content during silence. If clean text has sentences with no corresponding VTT cue (no turn exists at that time), drop them.
+6. **Consolidate turns.** Same speaker, consecutive VTT cues → merge into one turn (keep earliest timestamp).
+7. **Resolve tech-term spelling** against intake terms.
+
+### Output
+
+`polished.json` with segments:
+```json
+[
+  {"start": 12.4, "end": 25.1, "speaker": "Alice", "text": "..."},
+  {"start": 25.3, "end": 41.8, "speaker": "Bob", "text": "..."}
+]
+```
+
+Render with `render_transcript.py`.
+
+### Constraints
+
+- **VTT speakers are authoritative.** Never reassign speaker from clean text (it has none).
+- **VTT timestamps are authoritative.** Don't synthesize new ones.
+- **Preserve every substantive turn** from VTT. If a VTT cue exists, it maps to spoken content.
+- **Don't invent.** If clean text has no match for a VTT cue and the VTT text is unrecoverable, keep VTT text as-is or mark unclear.
+- See [fidelity rule](../SKILL.md#fidelity-rule).
+
+---
+
+## Diarize fallback pipeline
+
+Used only when no VTT is available and there are multiple speakers. **Known unstable** — diarize model fails on chunks >8 min. Warn user about quality.
+
+### Pipeline
+
+1. `prep_audio.py` → chunks at 8-min max + `manifest.json`
+2. Per-chunk: `transcribe_diarize.py --manifest --chunk-index N` (model: `gpt-4o-transcribe-diarize`, format: `diarized_json`)
 3. `merge_chunks.py` → `merged.json`
-4. **Cleanup pass — you do this directly as language work.** Read `merged.json` (and, for two-pass jobs, the parallel clean text) and emit the corrected JSON yourself in one pass. Not a Python script. See [Cleanup Pass](#cleanup-pass-step-44).
+4. **Cleanup pass** (language work) → `polished.json`
 5. `render_transcript.py` → `transcript.md`
 
-For technical / multilingual / mumbled audio where the diarize model alone produces unusable text, see [Two-pass text-quality flow](#two-pass-text-quality-flow).
+### Resume / retry contract
 
-## Resume / retry contract
-
-A chunk is "needs work" iff its manifest `status != "done"`. Possible values
-written by `transcribe_diarize.py`:
+A chunk is "needs work" iff its manifest `status != "done"`. Possible values:
 
 | `status` | Meaning |
 |---|---|
 | `pending` | Set by `prep_audio.py`. Never transcribed. |
-| `in_progress` | Transcription started; the script exited before writing `done` (success path) — likely an error. The chunk's `request_id` is set. |
+| `in_progress` | Transcription started; script exited before `done`. |
 | `done` | Transcript written and `transcript_file` populated. |
 
-On any failure the script exits with the matching error code (see
-[transcribe-cli.md](transcribe-cli.md)) and **does not** write `failed` to the
-manifest — the stderr `Error [<category>]:` line is the source of truth. To
-resume after a failure, the agent re-invokes `transcribe_diarize.py
---manifest --chunk-index N` for every chunk where `status != "done"`. Already
-`done` chunks are not re-transcribed.
+On failure: re-invoke `transcribe_diarize.py --manifest --chunk-index N` for every chunk where `status != "done"`. Already-done chunks are not re-transcribed.
 
-`transcript_file` paths in the manifest are stored **relative to the manifest's parent directory** so the working dir is portable. `merge_chunks.py` resolves them against `manifest_path.parent`.
+`transcript_file` paths are stored **relative to manifest's parent directory**.
 
-## merge_chunks.py CLI
+### merge_chunks.py CLI
 
 ```bash
 uv run --script scripts/merge_chunks.py \
   --manifest tmp/prep/<slug>/manifest.json \
-  --intake '{"speaker_count":2,"speaker_names":["Alice","Bob"],"topic":"Onboarding review","terms":["payroll","PandaDoc"]}' \
-  --out tmp/prep/<slug>/merged.json
-
-# With VTT cross-check (when Gate 1 chose "Re-transcribe + VTT reference"):
-uv run --script scripts/merge_chunks.py \
-  --manifest tmp/prep/<slug>/manifest.json \
   --intake '{"speaker_count":2,"speaker_names":["Alice","Bob"],"topic":"...","terms":[]}' \
-  --vtt tmp/prep/<slug>/vtt_cues.json \
   --out tmp/prep/<slug>/merged.json
 ```
 
-## Timestamp convention
+### Timestamp convention
 
-All `start` / `end` fields in `merged.json` are **absolute seconds on the
-global timeline** (not chunk-relative). `merge_chunks.py` rewrites the
-chunk-relative timestamps from `transcribe_diarize.py` outputs into absolute
-values during merge. The cleanup pass MUST preserve this convention in
-`polished.json` so `render_transcript.py` produces correct global timestamps.
+All `start` / `end` fields in `merged.json` are **absolute seconds on the global timeline** (not chunk-relative). The cleanup pass MUST preserve this so `render_transcript.py` produces correct timestamps.
 
-## merged.json schema
+### merged.json schema
 
 ```json
 {
   "version": 1,
   "language": "fr",
-  "intake_context": {
-    "speaker_count": 2,
-    "speaker_names": ["Alice", "Bob"],
-    "topic": "Onboarding flow review",
-    "terms": ["payroll", "Maude", "PandaDoc"]
-  },
+  "intake_context": { "speaker_count": 2, "speaker_names": ["Alice", "Bob"], "topic": "...", "terms": [] },
   "segments": [
-    {
-      "start": 12.4,
-      "end": 18.7,
-      "speaker": "A",
-      "text": "...",
-      "source_chunk": 0,
-      "in_overlap": null
-    }
+    { "start": 12.4, "end": 18.7, "speaker": "A", "text": "...", "source_chunk": 0, "in_overlap": null }
   ],
   "chunk_boundaries": [
-    {"index": 0, "core_end_s": 974.0, "shared_region": [944.0, 1004.0]}
+    {"index": 0, "core_end_s": 450.0, "shared_region": [420.0, 480.0]}
   ],
   "overlap_windows": [
-    {
-      "boundary_idx": 0,
-      "shared_region": [944.0, 1004.0],
-      "left": [/* chunk 0 segments in shared region */],
-      "right": [/* chunk 1 segments in shared region */]
-    }
-  ],
-  "cross_check_cues": [/* present only with --vtt */]
+    { "boundary_idx": 0, "shared_region": [420.0, 480.0], "left": [...], "right": [...] }
+  ]
 }
 ```
 
-## Cleanup Pass (Step 4.4)
+### Cleanup Pass (diarize fallback only)
 
 **This is language work you perform directly. Not a Python script.**
 
-The cleanup pass is language work. You (the agent executing this skill) read `merged.json` plus any parallel sources (clean-text pass, VTT cues) and emit the corrected JSON directly in one pass. Word-overlap heuristics, sentence regex, stopword tables, term-spelling regex — all wrong tools. See the [`Don't write language-processing scripts`](../SKILL.md#anti-patterns) anti-pattern.
+Read `merged.json` and emit corrected JSON in one pass:
 
-### Inputs
+1. **Remap speaker labels across chunks.** `overlap_windows[]` shows the same span on both sides — match speakers semantically.
+2. **Drop ASR debris.** Ghost segments, silence-induced subtitles, labels above intake speaker count.
+3. **Repair garbled spans** where intent is recoverable from context. See [fidelity rule](../SKILL.md#fidelity-rule).
+4. **Reconstruct cross-talk** from overlap windows into sequential turns.
+5. **Consolidate turns.** Same speaker, sub-second gap, same thought → one turn.
+6. **Smooth boundary stitches.** Sentence cut at `core_end_s` → glue halves.
+7. **Resolve tech-term spelling** against `intake_context.terms`.
 
-- `merged.json` — diarized JSON with timestamps, speakers, garbled ASR text
-- (Optional, two-pass mode) `clean_full.txt` — non-diarize transcribe output of the full stripped audio with a minimal prompt; better text quality, possibly with a few hallucinations
-- (Optional, VTT mode) `vtt_cues.json` — produced by `parse_vtt.py`
-
-### What the agent does
-
-In one pass, reading the inputs holistically:
-
-1. **Remap speaker labels across chunks.** `overlap_windows[]` shows the same audio span on both sides of a chunk boundary. If chunk 1's "B" matches chunk 0's "A" semantically, swap chunk 1's labels.
-2. **Drop ASR debris and fabrications.** Single-character ghost segments, silence-induced subtitle phrases ("Спасибо за просмотр"), labels above the intake speaker count, and (in two-pass mode) sentences from the clean pass that introduce concepts absent from the diarize signal — all dropped.
-3. **Repair garbled spans.** When the diarize text is ASR gibberish ("Артагамария", "Раил университет", transliterated tech terms) and the speaker's intent is recoverable from the clean pass or surrounding context, replace it with the faithful version. **This is not paraphrasing — it's selecting the better evidence of what was said.** See the [fidelity rule](../SKILL.md#fidelity-rule).
-4. **Reconstruct cross-talk.** From side-by-side `overlap_windows` into readable sequential turns; preserve who said what.
-5. **Consolidate over-fragmented turns.** Same speaker, sub-second gap, same thought → one turn.
-6. **Smooth boundary stitches.** Where a sentence got cut at `core_end_s`, glue the halves.
-7. **Resolve tech-term spelling** against `intake_context.terms` (Latin proper nouns: NestJS, Postgres, Render, S3, KYC; loanwords stay Cyrillic when natural in the speaker's register).
-8. **VTT restore** (when `cross_check_cues` present) — on API gaps (empty / sub-5-char span where VTT cue is substantive); VTT spelling preference for proper nouns in terms.
-
-### Output
-
-`polished.json` with the same `segments[]` schema as `merged.json`. Drop the `in_overlap` and `source_chunk` fields if you want; keep `start` / `end` / `speaker` / `text`. Render with `render_transcript.py`.
-
-`edits.json` is **optional**, not required. If you produce one for audit purposes, log substantive replacements (garble-repair, hallucination-drop, label-remap) — skip the long tail of consolidations and spelling fixes. Don't let the schema turn the cleanup into a bookkeeping exercise.
+Output: `polished.json` (same schema, drop `in_overlap`/`source_chunk`). Render with `render_transcript.py`.
 
 ### Constraints
 
-- **Preserve every substantive turn.** Decisions, claims, questions, objections, reactions — they all stay. Even when a turn is reworded for readability, its meaning must survive intact.
-- **Don't invent.** When neither source has signal for a span, leave it empty / mark unclear. Don't generate plausible-sounding dialog to fill the gap.
-- **Don't reorder.** Segments stay in timeline order; cross-talk reconstruction is local to one overlap window.
-- **Timestamps come from source segments.** Don't synthesize new ones.
-- **VTT speaker labels never override API ones.** VTT text may restore gaps; VTT speakers don't.
+- **Preserve every substantive turn.**
+- **Don't invent.** Unrecoverable spans → mark unclear.
+- **Don't reorder.** Timeline order preserved.
+- **Timestamps from source segments.** Don't synthesize.
 
-### Suggested prompt (when invoking via Anthropic SDK rather than inline)
+---
 
-```
-You are merging transcripts of the same audio. Inputs:
-  - merged.json: diarized JSON with timestamps + speakers + garbled ASR text.
-  - (optional) clean_full.txt: non-diarized clean text of the same audio,
-    fluent but may contain fabrications from a prompted run.
-
-Output a JSON list of segments preserving merged.json's skeleton (speaker,
-start, end), with text drawn from the clean pass where it faithfully
-represents the meaning of the dirty segment, falling back to the dirty text
-(with light tech-term spelling fixes) where the clean pass invented content
-or skipped the turn. Drop sentences that introduce concepts absent from any
-nearby diarize segment. Preserve every substantive turn the speaker made.
-
-Output JSON only, no commentary.
-```
-
-## Two-pass text-quality flow
-
-Use when the audio is technical, multilingual, mumbled, or otherwise produces unusable text from the diarize-only path. Typical signal at Gate 1: the user describes the audio as "Russian devspeak", "engineering call with English jargon", "thick accent + fast pace", or the user previously got a poor result from a single-pass run.
-
-### When to use
-
-- Russian, French, German, etc. with heavy English technical vocabulary mixed in
-- Engineering / architecture / domain-specific calls
-- Multiple speakers talking over each other
-- Any case where the user has rejected a diarize-only transcript as too garbled
-
-When in doubt, ask the user at Gate 1.
-
-### Pipeline
-
-1. **Pass 1 — diarize for skeleton** (per chunk, as standard). Produces speaker labels + timestamps. Text quality may be poor.
-2. **Pass 2 — non-diarize for text** on `stripped.ogg`.
-   - **≤18 min stripped:** single call on full `stripped.ogg` (preferred — continuous context produces more fluent prose, avoids chunk-overlap duplication).
-   - **>18 min stripped:** chunk Pass 2 the same way as Pass 1 (reuse the same chunks from `prep_audio.py`). The API rejects audio longer than ~18 min regardless of file size. Run `transcribe_diarize.py` per chunk with `--model gpt-4o-transcribe --response-format text`, concatenate outputs into `clean_full.txt`.
-   - File size per chunk must be ≤25 MB. At Opus 32k mono (~240 KB/min), 18 min ≈ 4.3 MB — always safe. Only re-encode if source chunks are unusually large (e.g. high-bitrate WAV input).
-   - Use a **minimal prompt**: vocabulary list + 1-line topic. Avoid summaries, lists of names, example phrases — they leak into the output. See [prompt-hallucination warning](transcribe-cli.md#prompt-hallucination-warning).
-3. **Merge — you do this directly in one pass.** Read both `merged.json` and `clean_full.txt`, emit the merged transcript yourself per the [Cleanup Pass](#cleanup-pass-step-44) above.
+## Worked Example: VTT-aligned (30-min meeting, 4 chunks)
 
 ```bash
-# Pass 1 (per chunk, as usual)
-uv run --script scripts/transcribe_diarize.py \
-  tmp/prep/<slug>/chunks/chunk_00.ogg \
-  --model gpt-4o-transcribe-diarize --response-format diarized_json \
-  --language ru --manifest tmp/prep/<slug>/manifest.json \
-  --chunk-index 0 --out-dir tmp/prep/<slug>/transcripts
-# (repeat for chunk 1, …)
+# Parse VTT
+uv run --script scripts/parse_vtt.py inbox/meeting.vtt -o tmp/prep/onboarding-20260505/vtt_cues.json
 
-uv run --script scripts/merge_chunks.py \
-  --manifest tmp/prep/<slug>/manifest.json \
-  --intake '{...}' \
-  --out tmp/prep/<slug>/merged.json
+# Preprocess
+uv run --script scripts/prep_audio.py inbox/meeting.mp4 --out-dir tmp/prep/onboarding-20260505
+# → Chunks: 4, Stripped: 1823.5s
 
-# Pass 2 (non-diarize for clean text)
-# Short audio (≤18 min): one call on full stripped.ogg
-uv run --script scripts/transcribe_diarize.py \
-  tmp/prep/<slug>/stripped.ogg \
-  --model gpt-4o-transcribe --response-format text \
-  --language ru \
-  --prompt "Terms: NestJS, Fastify, Postgres, Render, Railway, KYC. Names: Alice, Bob. Topic: backend architecture." \
-  --out tmp/prep/<slug>/clean_full.txt
+# Transcribe each chunk (text only, no diarize)
+for i in 0 1 2 3; do
+  uv run --script scripts/transcribe_diarize.py \
+    tmp/prep/onboarding-20260505/chunks/chunk_0${i}.ogg \
+    --model gpt-4o-transcribe --response-format text \
+    --language ru \
+    --prompt "Terms: NestJS, Postgres. Topic: onboarding review." \
+    --manifest tmp/prep/onboarding-20260505/manifest.json \
+    --chunk-index $i --out-dir tmp/prep/onboarding-20260505/transcripts
+done
 
-# Long audio (>18 min): per-chunk, same chunks as Pass 1
-# for i in 0 1 2; do
-#   uv run --script scripts/transcribe_diarize.py \
-#     tmp/prep/<slug>/chunks/chunk_0${i}.ogg \
-#     --model gpt-4o-transcribe --response-format text \
-#     --language ru \
-#     --prompt "Terms: NestJS, Fastify, Postgres. Topic: backend architecture." \
-#     --out tmp/prep/<slug>/clean_chunks/chunk_0${i}.txt
-# done
-# cat tmp/prep/<slug>/clean_chunks/chunk_*.txt > tmp/prep/<slug>/clean_full.txt
+# Concatenate clean text
+cat tmp/prep/onboarding-20260505/transcripts/chunk_0*.transcript.txt > tmp/prep/onboarding-20260505/clean_full.txt
 
-# Merge → cleanup pass: agent reads merged.json + clean_full.txt and produces polished.json
-# (you perform the merge directly, no Python alignment script)
+# Agent aligns clean_full.txt to vtt_cues.json → polished.json (language work)
+
+# Render
+uv run --script scripts/render_transcript.py \
+  tmp/prep/onboarding-20260505/polished.json \
+  --speakers "Speaker 1=Dima,Speaker 2=Mark" \
+  --out outbox/onboarding-20260505/transcript.md
 ```
 
-## Worked Example
+## Worked Example: Diarize fallback (20-min, no VTT)
 
-### 45-minute meeting (3 chunks), single-pass
+```bash
+# Preprocess (8-min chunks)
+uv run --script scripts/prep_audio.py inbox/call.m4a --out-dir tmp/prep/call-20260505
+# → Chunks: 3, Stripped: 1195.0s
 
-```
-$ uv run --script scripts/prep_audio.py inbox/workshop.m4a --out-dir tmp/prep/workshop-20260504
-Manifest: tmp/prep/workshop-20260504/manifest.json
-Chunks: 3
-Stripped duration: 2695.2s
-
-$ # Per-chunk transcription (agent loop)
-$ uv run --script scripts/transcribe_diarize.py \
-    tmp/prep/workshop-20260504/chunks/chunk_00.ogg \
+# Diarize per chunk
+for i in 0 1 2; do
+  uv run --script scripts/transcribe_diarize.py \
+    tmp/prep/call-20260505/chunks/chunk_0${i}.ogg \
     --model gpt-4o-transcribe-diarize --response-format diarized_json \
-    --language en --manifest tmp/prep/workshop-20260504/manifest.json \
-    --chunk-index 0 --out-dir tmp/prep/workshop-20260504/transcripts
-[request] X-Client-Request-Id: abc123...
-[done] elapsed_s=127.3 request_id=abc123...
-Wrote tmp/prep/workshop-20260504/transcripts/chunk_00.transcript.json
+    --language en \
+    --manifest tmp/prep/call-20260505/manifest.json \
+    --chunk-index $i --out-dir tmp/prep/call-20260505/transcripts
+done
 
-$ # (repeat for chunks 1, 2)
+# Merge
+uv run --script scripts/merge_chunks.py \
+  --manifest tmp/prep/call-20260505/manifest.json \
+  --intake '{"speaker_count":2,"speaker_names":["A","B"],"topic":"Sales call","terms":["CRM","Hubspot"]}' \
+  --out tmp/prep/call-20260505/merged.json
 
-$ uv run --script scripts/merge_chunks.py \
-    --manifest tmp/prep/workshop-20260504/manifest.json \
-    --intake '{"speaker_count":3,"speaker_names":["A","B","C"],"topic":"Workshop","terms":["Kubernetes","ArgoCD"]}' \
-    --out tmp/prep/workshop-20260504/merged.json
-Wrote tmp/prep/workshop-20260504/merged.json
+# Cleanup pass → polished.json (language work)
 
-$ # Cleanup pass — you read merged.json and write polished.json directly (language work, not a script).
-$ uv run --script scripts/render_transcript.py \
-    tmp/prep/workshop-20260504/polished.json \
-    --speakers "A=Sarah,B=Mike,C=Lisa" \
-    --out outbox/workshop-20260504/transcript.md
-Wrote outbox/workshop-20260504/transcript.md
+# Render
+uv run --script scripts/render_transcript.py \
+  tmp/prep/call-20260505/polished.json \
+  --speakers "A=Sarah,B=Client" \
+  --out outbox/call-20260505/transcript.md
 ```

@@ -35,41 +35,46 @@ Ask verbatim:
 
 Record answers; sensible defaults if user skips a field. **Never silently transcribe without asking.**
 
-Technical / multilingual / mumbled audio (engineering calls, mixed-language, thick accents, fast cross-talk) → flag at Gate 1, propose [two-pass flow](references/chunked-transcription.md#two-pass-text-quality-flow).
+Technical / multilingual / mumbled audio → VTT-aligned path strongly preferred (if VTT available). Without VTT, diarize fallback with 8-min chunks; warn user about quality.
 
 ### Steps 1–6
 
 1. **Inventory + probe** — `ls` inbox, `ffprobe` media. VTT present → parse via [parse_vtt.py](scripts/parse_vtt.py) → `tmp/prep/<slug>/vtt_cues.json`; sample cues, assess quality (speaker count, garble, gaps, proper-noun fidelity). Non-English VTTs: screen-reference detection won't fire — read cues directly.
 
-2. **Gate 1** — present findings + plan + `{meeting-slug}`. VTT assessment → user confirms one of:
+2. **Gate 1** — present findings + plan + `{meeting-slug}`. Determine transcription path:
 
-   | VTT outcome | Effect |
+   | Scenario | Path |
    |---|---|
-   | VTT-only | Render VTT directly; skip prep + API |
-   | Re-transcribe + VTT reference | Full API path; `merge_chunks.py --vtt` |
-   | Re-transcribe, ignore VTT | Full API path; no `--vtt` |
-
-   Also decide: **single-pass** (diarize only; default for clear audio) or **two-pass** (diarize skeleton + non-diarize clean text + LLM merge; for technical/mumbled). See [two-pass](references/chunked-transcription.md#two-pass-text-quality-flow).
+   | VTT good quality | Render VTT directly; skip prep + API |
+   | VTT exists, text garbled | **VTT-aligned retranscription**: VTT as skeleton (speakers + timestamps) + `gpt-4o-transcribe` for text quality → agent aligns |
+   | No VTT, single speaker | `gpt-4o-transcribe` directly |
+   | No VTT, multi-speaker | Diarize fallback: `gpt-4o-transcribe-diarize` at 8-min chunks (known unstable — warn user) |
 
 3. **Preprocess + transcribe** — run [prep_audio.py](scripts/prep_audio.py) on input (audio or video; extracts audio in-pass; source video retained for screenshots).
-   - ≤18 min stripped → single `transcribe_diarize.py` call on `stripped.ogg`
-   - \>18 min → per-chunk loop with `--manifest --chunk-index N`; report progress between chunks; then `merge_chunks.py` (+ `--vtt` iff Gate 1). **Both passes** (diarize and text) must chunk at ≤18 min — the API rejects audio longer than ~18 min regardless of file size. See [chunked transcription](references/chunked-transcription.md).
-   - \>25 MB per chunk → re-encode lower bitrate (Opus 32k mono ≈ 240 KB/min; 18 min chunk ≈ 4.3 MB — normally not an issue)
 
-   Model choice:
+   **VTT-aligned path** (primary for retranscription):
+   - VTT provides speaker labels + turn timestamps; transcription provides clean text
+   - Run `gpt-4o-transcribe` on `stripped.ogg` (or per-chunk if >8 min) with `--prompt` (vocab + 1-line topic only)
+   - Agent aligns clean text to VTT turns — this is **language work you perform directly**. Match transcribed text to VTT turn boundaries using VTT text as positional guide. Preserve VTT speaker labels and timestamps. See [VTT-aligned merge](references/chunked-transcription.md#vtt-aligned-merge).
 
-   | Speakers | Model | `--prompt` | Diarize |
-   |---|---|---|---|
-   | 1 | `gpt-4o-transcribe` | vocab + 1-line topic only | no |
-   | 2+ | `gpt-4o-transcribe-diarize` | rejected by API | yes |
-   | 2+, technical/mumbled | both: diarize skeleton + `gpt-4o-transcribe` (per chunk if >18 min, minimal prompt) + LLM merge | text pass only | skeleton |
+   **Single-speaker path:**
+   - Run `gpt-4o-transcribe` on `stripped.ogg` (or per-chunk if >8 min) with `--prompt`
+   - Output is the transcript directly; no alignment needed
 
-   `--language` required on every call. On non-zero exit → surface stderr `Error [<category>]:`, ask wait/cancel. See [exit codes](references/transcribe-cli.md#exit-codes).
+   **Diarize fallback** (no VTT, multi-speaker):
+   - Chunks at 8 min max (diarize model unstable on longer audio)
+   - Per-chunk: `transcribe_diarize.py --manifest --chunk-index N`; then `merge_chunks.py`
+   - Warn user: diarization quality is unreliable; may need manual correction
+   - See [chunked transcription](references/chunked-transcription.md)
+
+   All paths: `--language` required. On non-zero exit → surface stderr `Error [<category>]:`, ask wait/cancel. See [exit codes](references/transcribe-cli.md#exit-codes).
 
 4. **Speaker labelling** —
-   - `render_transcript.py --samples <json>` → show longest segments per speaker → user names them.
-   - **Short path:** `render_transcript.py <json> --speakers A=Name1,B=Name2 --out outbox/{slug}/transcript.md`
-   - **Long path (after merge_chunks.py):** cleanup pass — **you do this directly as language work**, not a script. Read `merged.json` (+ `clean_full.txt` in two-pass) and emit `polished.json`. See [Cleanup Pass](references/chunked-transcription.md#cleanup-pass-step-44). Then render via `render_transcript.py`.
+   - **VTT-aligned:** speakers come from VTT; confirm with user (VTT labels may be generic like "Speaker 1").
+   - **Diarize fallback:** `render_transcript.py --samples <json>` → user names speakers.
+   - **Single-speaker:** user provides name or default.
+   - Then render via `render_transcript.py --speakers ... --out outbox/{slug}/transcript.md`.
+   - For diarize long path: cleanup pass as **language work** on `merged.json` → `polished.json`. See [Cleanup Pass](references/chunked-transcription.md#cleanup-pass-step-44).
 
 5. **Transcript** (mandatory artifact) — produced by step 4. For exact markdown shape see [output templates § transcript.md](references/output-templates.md#step-4--transcriptmd-shape). Faithful to **meaning**; repair recoverable garble; never invent. See [Fidelity rule](#fidelity-rule).
 
