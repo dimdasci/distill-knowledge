@@ -3,6 +3,7 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #   "openai>=2.4,<3",        # 2.4.0 added typed gpt-4o-transcribe-diarize support
+#   "httpx>=0.25",           # granular Timeout objects for the SDK
 #   "python-dotenv>=1.0",
 # ]
 # ///
@@ -21,8 +22,12 @@ import json
 import mimetypes
 import os
 import sys
+import time
+import uuid
 from pathlib import Path
 from typing import Any, NoReturn
+
+import httpx
 
 
 def _load_dotenv_quietly() -> None:
@@ -71,6 +76,8 @@ MAX_AUDIO_BYTES = 25 * 1024 * 1024
 MAX_KNOWN_SPEAKERS = 4
 
 ALLOWED_RESPONSE_FORMATS = {"text", "json", "diarized_json"}
+
+DEFAULT_TIMEOUT = httpx.Timeout(connect=10.0, write=120.0, read=450.0, pool=10.0)
 
 
 def _die(message: str, code: int = 1) -> NoReturn:
@@ -180,7 +187,7 @@ def _build_output_path(
     return Path(f"{audio_path.stem}.transcript{ext}")
 
 
-def _create_client():
+def _create_client(timeout: httpx.Timeout | None = None):
     try:
         from openai import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports]
             OpenAI,
@@ -190,7 +197,7 @@ def _create_client():
             "openai SDK not importable. Run this script via "
             "`uv run --script` so PEP 723 metadata resolves the dep automatically."
         )
-    return OpenAI()
+    return OpenAI(timeout=timeout or DEFAULT_TIMEOUT)
 
 
 def _format_output(result: Any, response_format: str) -> str:
@@ -238,10 +245,91 @@ def _die_api(category: str, exit_code: int, message: str) -> NoReturn:
     raise SystemExit(exit_code)
 
 
+def _preflight(client: Any, model: str, cache_dir: Path | None) -> None:
+    """Fail-fast check: verify auth + model access before uploading audio.
+
+    Result is cached in `cache_dir/.preflight_ok` for the session.
+    """
+    from openai import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports]
+        APIConnectionError,
+        AuthenticationError,
+        NotFoundError,
+        PermissionDeniedError,
+    )
+
+    if cache_dir:
+        marker = cache_dir / ".preflight_ok"
+        if marker.exists():
+            return
+
+    try:
+        client.models.retrieve(model)
+    except AuthenticationError as exc:
+        _die_api(
+            "auth", 10,
+            "OpenAI rejected the API key (HTTP 401). The key may be revoked, "
+            "expired, or malformed. Replace OPENAI_API_KEY and retry.\n"
+            f"  Details: {exc}",
+        )
+    except PermissionDeniedError as exc:
+        _die_api(
+            "permission", 11,
+            f"API key does not have access to model {model!r} (HTTP 403). "
+            "Grant model access on the project at "
+            "https://platform.openai.com/settings, or choose a model the key can use.\n"
+            f"  Details: {exc}",
+        )
+    except NotFoundError as exc:
+        _die_api(
+            "permission", 11,
+            f"Model {model!r} was not found (HTTP 404). "
+            "Check the model name; it may be misspelled or "
+            "unavailable on this account.\n"
+            f"  Details: {exc}",
+        )
+    except APIConnectionError as exc:
+        _die_api(
+            "service", 20,
+            "Could not reach OpenAI during pre-flight check. "
+            "Check connectivity and retry.\n"
+            f"  Details: {exc}",
+        )
+
+    if cache_dir:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        marker = cache_dir / ".preflight_ok"
+        marker.write_text("ok\n")
+
+
+def _update_manifest(
+    manifest_path: Path,
+    chunk_index: int,
+    *,
+    status: str | None = None,
+    request_id: str | None = None,
+    transcript_file: str | None = None,
+) -> None:
+    """Atomically update a chunk row in the manifest."""
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    chunk = data["chunks"][chunk_index]
+    if status is not None:
+        chunk["status"] = status
+    if request_id is not None:
+        chunk["request_id"] = request_id
+    if transcript_file is not None:
+        chunk["transcript_file"] = transcript_file
+    tmp = manifest_path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp.rename(manifest_path)
+
+
 def _run_one(
     client: Any,
     audio_path: Path,
     payload: dict[str, Any],
+    *,
+    read_timeout: float | None = None,
+    request_id: str | None = None,
 ) -> Any:
     # Lazy import so dry-run/preflight paths don't require the SDK loaded.
     from openai import (  # noqa: PLC0415  # pyright: ignore[reportMissingImports]
@@ -255,12 +343,29 @@ def _run_one(
         RateLimitError,
     )
     model = payload.get("model")
+    req_id = request_id or str(uuid.uuid4())
+
+    # Per-call timeout override
+    call_timeout: httpx.Timeout | None = None
+    if read_timeout is not None:
+        call_timeout = httpx.Timeout(connect=10.0, write=120.0, read=read_timeout, pool=10.0)
+
+    # Extra headers for traceability
+    extra_headers = {"X-Client-Request-Id": req_id}
+
+    print(f"[request] X-Client-Request-Id: {req_id}", file=sys.stderr)
+    t0 = time.monotonic()
+
     try:
         with audio_path.open("rb") as audio_file:
-            return client.audio.transcriptions.create(
-                file=audio_file,
+            kwargs: dict[str, Any] = {
+                "file": audio_file,
+                "extra_headers": extra_headers,
                 **payload,
-            )
+            }
+            if call_timeout is not None:
+                kwargs["timeout"] = call_timeout
+            result = client.audio.transcriptions.create(**kwargs)
     except AuthenticationError as exc:
         _die_api(
             "auth", 10,
@@ -299,10 +404,20 @@ def _run_one(
             "audio format, malformed file, or invalid parameter combination.\n"
             f"  Details: {exc}",
         )
-    except (APIConnectionError, APITimeoutError) as exc:
+    except APITimeoutError as exc:
+        elapsed = time.monotonic() - t0
+        effective_timeout = read_timeout if read_timeout is not None else 450.0
+        _die_api(
+            "timeout", 21,
+            f"Request accepted but no response within {effective_timeout:.0f}s "
+            f"(elapsed {elapsed:.1f}s). request_id={req_id}. "
+            "Retry with --timeout <larger> or cancel.\n"
+            f"  Details: {exc}",
+        )
+    except APIConnectionError as exc:
         _die_api(
             "service", 20,
-            "Could not reach OpenAI (network/timeout). The SDK already retried; "
+            "Could not reach OpenAI (network error). The SDK already retried; "
             "this is usually transient. Check connectivity and retry.\n"
             f"  Details: {exc}",
         )
@@ -318,6 +433,11 @@ def _run_one(
             "unknown", 1,
             f"Unexpected API error for {audio_path}: {type(exc).__name__}: {exc}",
         )
+
+    elapsed = time.monotonic() - t0
+    print(f"[done] elapsed_s={elapsed:.1f} request_id={req_id}", file=sys.stderr)
+
+    return result, req_id, elapsed
 
 
 def main() -> None:
@@ -362,6 +482,28 @@ def main() -> None:
         action="store_true",
         help="Validate inputs and print payload without calling the API",
     )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=None,
+        help="Override read timeout in seconds (default: 450)",
+    )
+    parser.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="Skip the pre-flight model access check",
+    )
+    parser.add_argument(
+        "--manifest",
+        default=None,
+        help="Path to manifest.json for chunked transcription (updates chunk status)",
+    )
+    parser.add_argument(
+        "--chunk-index",
+        type=int,
+        default=None,
+        help="Chunk index in manifest to update (required with --manifest)",
+    )
 
     args = parser.parse_args()
     args.response_format = _normalize_response_format(args.response_format)
@@ -381,6 +523,8 @@ def main() -> None:
         and "transcribe-diarize" not in args.model
     ):
         _die("diarized_json requires gpt-4o-transcribe-diarize")
+    if args.manifest and args.chunk_index is None:
+        _die("--chunk-index is required when using --manifest")
 
     _check_runner()
     _ensure_api_key(args.dry_run)
@@ -403,9 +547,47 @@ def main() -> None:
 
     client = _create_client()
 
+    # Pre-flight: verify model access before uploading audio
+    if not args.skip_preflight:
+        # Determine cache dir for preflight marker
+        preflight_cache: Path | None = None
+        if args.out_dir:
+            preflight_cache = Path(args.out_dir)
+        elif args.manifest:
+            preflight_cache = Path(args.manifest).parent
+        _preflight(client, args.model, preflight_cache)
+
+    # Manifest setup
+    manifest_path = Path(args.manifest) if args.manifest else None
+
     for path in audio_paths:
-        result = _run_one(client, path, payload)
+        req_id = str(uuid.uuid4())
+
+        # Update manifest: in-progress
+        if manifest_path and args.chunk_index is not None:
+            _update_manifest(
+                manifest_path, args.chunk_index,
+                status="in_progress", request_id=req_id,
+            )
+
+        result, req_id, elapsed = _run_one(
+            client, path, payload,
+            read_timeout=args.timeout,
+            request_id=req_id,
+        )
         output = _format_output(result, args.response_format)
+
+        # Inject request_id and elapsed_s into JSON output
+        if args.response_format != "text":
+            try:
+                output_data = json.loads(output)
+                if isinstance(output_data, dict):
+                    output_data["request_id"] = req_id
+                    output_data["elapsed_s"] = round(elapsed, 1)
+                    output = json.dumps(output_data, indent=2, ensure_ascii=False)
+            except json.JSONDecodeError:
+                pass
+
         if args.stdout:
             print(output)
             continue
@@ -415,6 +597,14 @@ def main() -> None:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(output, encoding="utf-8")
         print(f"Wrote {out_path}")
+
+        # Update manifest: done
+        if manifest_path and args.chunk_index is not None:
+            _update_manifest(
+                manifest_path, args.chunk_index,
+                status="done",
+                transcript_file=str(out_path),
+            )
 
 
 if __name__ == "__main__":

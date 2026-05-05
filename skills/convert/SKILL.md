@@ -15,7 +15,7 @@ compatibility: Requires uv, ffmpeg, ffprobe, Python ≥3.10, and OPENAI_API_KEY 
 
 Always emit `outbox/{meeting-slug}/transcript.md`; screenshots inline when useful; `summary.md` + `topics/{slug}.md` only on request. `{meeting-slug}` = `kebab-case-topic-YYYYMMDD`. Never touch `inbox/` or `knowledge/`.
 
-References (load on demand): [output templates](references/output-templates.md) · [ffmpeg](references/ffmpeg.md) · [transcribe API](references/transcribe-api.md) · [transcribe CLI](references/transcribe-cli.md).
+References (load on demand): [output templates](references/output-templates.md) · [ffmpeg](references/ffmpeg.md) · [transcribe API](references/transcribe-api.md) · [transcribe CLI](references/transcribe-cli.md) · [prep audio CLI](references/prep-audio-cli.md) · [chunked transcription](references/chunked-transcription.md).
 
 ## Setup
 
@@ -55,15 +55,29 @@ Record answers. Use sensible defaults if the user skips a field, but **never sil
 
 ### Steps 1–10
 
-1. **Inventory + probe** inbox media + VTT.
-2. **Gate 1** — findings, preprocessing plan, `{meeting-slug}`.
-3. **Preprocess** what Gate 1 approved (convert, audio extract, VTT parse, re-transcribe + diarize, screen probe). Re-transcription uses [scripts/transcribe_diarize.py](scripts/transcribe_diarize.py); on non-zero exit follow [Error handling](#error-handling), surface verbatim, **wait before retrying**, never fall back silently. See [transcribe CLI](references/transcribe-cli.md) for full command examples.
+1. **Inventory + probe** inbox media + VTT. When a VTT exists, parse it via [scripts/parse_vtt.py](scripts/parse_vtt.py) into `tmp/prep/<slug>/vtt_cues.json`. Sample cues across the duration and write a short assessment: speaker count vs intake, garble examples, coverage gaps, proper-noun fidelity.
+2. **Gate 1** — findings, preprocessing plan, `{meeting-slug}`. When a VTT assessment exists, recommend one of three outcomes (user confirms):
+
+   | Outcome | Step 3 effect | Cleanup-pass effect |
+   |---|---|---|
+   | **VTT-only** | render VTT directly; skip prep + API | not invoked |
+   | **Re-transcribe + VTT reference** | full API path; `merge_chunks.py --vtt` | reads `cross_check_cues`; per-span restore + spelling preference |
+   | **Re-transcribe, ignore VTT** | full API path; no `--vtt` | standard |
+
+3. **Preprocess + transcribe.** Run [scripts/prep_audio.py](scripts/prep_audio.py) on the input file (audio or video — it extracts the audio track in-pass via `-vn`; the source video is preserved for Step 6 screenshots). See [prep audio CLI](references/prep-audio-cli.md).
+
+   - **Short (≤18 min stripped):** single `transcribe_diarize.py` call on `stripped.ogg`.
+   - **Long (>18 min stripped):** per-chunk loop — invoke `transcribe_diarize.py --manifest --chunk-index N` for each chunk; report progress to user between chunks ("chunk 2/3 done in 251 s, ~4 min remaining"). Then `merge_chunks.py` (with `--vtt` iff Gate 1 chose "Re-transcribe + VTT reference"). See [chunked transcription](references/chunked-transcription.md).
+
+   On non-zero exit follow [Error handling](#error-handling), surface verbatim, **wait before retrying**, never fall back silently. See [transcribe CLI](references/transcribe-cli.md) for full command examples.
+
 4. **Speaker labelling** (after diarized transcription, before cleaned transcript):
    1. Run [scripts/render_transcript.py](scripts/render_transcript.py) `--samples <json>` — show the user the longest 1–2 substantive segments per detected speaker.
    2. User names speakers (or confirms `A`/`B`/`C` if no preference).
-   3. Run [scripts/render_transcript.py](scripts/render_transcript.py) `<json> --speakers A=Name1,B=Name2 --out outbox/{meeting-slug}/transcript.md` — emits the cleaned transcript with speaker labels, dropping hallucinations and empty turns.
-5. **Cleaned transcript (mandatory)** — produced by step 4.3 above. Cue: `**Alice** [0:00:12]: ...`. Faithful, never paraphrased.
-6. **Screenshots inline** — skip if no screen content; else `timestamp + 2 s`, `-q:v 2`, inline at cue.
+   3. **Short path:** Run [scripts/render_transcript.py](scripts/render_transcript.py) `<json> --speakers A=Name1,B=Name2 --out outbox/{meeting-slug}/transcript.md` — emits the cleaned transcript with speaker labels, dropping hallucinations and empty turns.
+   4. **Long path (after `merge_chunks.py`):** Agent cleanup pass on `merged.json` → `polished.json` + `edits.json`. See [cleanup pass contract](references/chunked-transcription.md#cleanup-pass-contract-step-44). Then render `polished.json` via `render_transcript.py`.
+5. **Cleaned transcript (mandatory)** — produced by step 4.3 or 4.4 above. Cue: `**Alice** [0:00:12]: ...`. Faithful, never paraphrased.
+6. **Screenshots inline** — skip if no screen content; else `timestamp + 2 s`, `-q:v 2`, inline at cue. Source video path from `manifest.json` `source` field.
 7. **Gate 2** — structured docs or transcript only?
 8. **Plan structure** — topics, decisions, actions, open questions, pain points, proposals.
 9. **Gate 3 + emit** `summary.md`, `topics/{slug}.md` (default/process), Mermaid for flow/decision shots.
@@ -73,8 +87,11 @@ Record answers. Use sensible defaults if the user skips a field, but **never sil
 
 | Situation | Decision |
 |---|---|
-| VTT speakers usable | Parse VTT, skip re-transcribe |
-| VTT generic / garbled | Re-transcribe + diarize |
+| VTT exists + Gate 1 → VTT-only | Parse VTT, render directly, skip prep + API |
+| VTT exists + Gate 1 → Re-transcribe + VTT reference | Full API path; `merge_chunks.py --vtt` |
+| VTT exists + Gate 1 → Re-transcribe, ignore VTT | Full API path; no `--vtt` |
+| Stripped duration >18 min | Split into balanced chunks ≤18 min each |
+| Inbox is video, transcription needed | Run `prep_audio.py` on the video file directly; audio track extracted in-pass; original video retained for Step 6 |
 | Video unreadable / wrong container | Convert first |
 | Probe: only faces | Zero screenshots |
 | Probe: UI / slides / docs | Screenshots in scope |
@@ -103,6 +120,7 @@ CLI exits non-zero with stderr `Error [<category>]: <message>`. SDK already retr
 | 11 | permission (403/404) — **Stop. Quote failing model. Ask user to grant access or pick another. Wait, re-run.** |
 | 12 | rate-limit (429) — link `platform.openai.com/usage`; ask: **wait+retry, or cancel?** |
 | 20 | service (network / 5xx) — link `status.openai.com`; ask: **wait+retry, or cancel?** |
+| 21 | timeout (request accepted, no response in time) — surface `request_id`; ask: **retry with `--timeout <larger>`, or cancel?** |
 | 30 | bad-request (400) — abort, surface `Details:`, ask user to re-encode |
 
 **Default on non-zero exit** — surface `Error [<category>]:` + `Details:`, then ask:
@@ -128,3 +146,6 @@ CLI exits non-zero with stderr `Error [<category>]: <message>`. SDK already retr
 - **Don't pass `--prompt` to the diarize model** — unsupported.
 - **Don't send files >25 MB** — split or transcode first.
 - **Don't run with `python3`** — PEP 723 deps need `uv run --script`.
+- **Don't auto-pick a VTT path.** Always surface VTT assessment and let user confirm at Gate 1.
+- **Don't override API speaker labels with VTT speaker labels.** VTT text may restore gaps; VTT speakers never override.
+- **Don't skip the cleanup pass on chunked inputs.** Step 4.4 is mandatory after `merge_chunks.py`.

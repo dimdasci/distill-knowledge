@@ -22,6 +22,12 @@ TIMESTAMP_RE = re.compile(
 )
 SPEAKER_RE = re.compile(r"^(.+?):\s+(.+)$")
 
+
+class VTTParseError(Exception):
+    """Raised when a VTT file cannot be read or parsed."""
+    pass
+
+
 SCREEN_PATTERNS = {
     "explicit": ["see my screen", "screen share", "showing you", "let me show",
                   "look at this", "you see this", "can you see"],
@@ -77,13 +83,16 @@ def _check_input(vtt_path: str) -> Path:
     return path
 
 
-def parse_vtt(filepath: str) -> dict:
-    """Parse a VTT file and return structured data."""
+def parse_vtt(filepath: str | Path) -> dict:
+    """Parse a VTT file and return structured data.
+
+    Raises VTTParseError on file read failures.
+    """
     try:
         with open(filepath, encoding="utf-8") as f:
             lines = f.read().splitlines()
     except (OSError, UnicodeDecodeError) as e:
-        _die(f"reading file: {e}")
+        raise VTTParseError(f"reading file: {e}") from e
 
     # Find WEBVTT header
     start = 0
@@ -189,7 +198,10 @@ def main():
     args = parser.parse_args()
 
     vtt_path = _check_input(args.vtt_file)
-    result = parse_vtt(str(vtt_path))
+    try:
+        result = parse_vtt(vtt_path)
+    except VTTParseError as exc:
+        _die(str(exc), 2)
     indent = 2 if args.pretty else None
     output_str = json.dumps(result, indent=indent, ensure_ascii=False)
     if indent:

@@ -9,3 +9,4 @@ skills/convert/eval/report.json
 skills/convert/scripts/tests/probe_*.py
 skills/convert/scripts/tests/explore_*.py
 tmp/
+skills/convert/scripts/__pycache__/

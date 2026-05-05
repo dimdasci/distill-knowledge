@@ -66,6 +66,56 @@ uv run --script scripts/transcribe_diarize.py --help  # deps resolve?
 
 If `uv --version` fails → run Setup. If `--help` fails with `openai not installed`, surface verbatim — do not `pip install` manually; that defeats PEP 723.
 
+## Timeout and resilience flags
+
+```bash
+# Override read timeout (default 450s) — useful for very large files or known-slow endpoints
+uv run --script scripts/transcribe_diarize.py \
+  audio.wav --model gpt-4o-transcribe-diarize \
+  --response-format diarized_json \
+  --timeout 600
+
+# Skip pre-flight model check (offline tests, already verified)
+uv run --script scripts/transcribe_diarize.py \
+  audio.wav --skip-preflight --dry-run
+
+# Chunked transcription with manifest tracking
+uv run --script scripts/transcribe_diarize.py \
+  tmp/prep/meeting/chunks/chunk_00.ogg \
+  --model gpt-4o-transcribe-diarize \
+  --response-format diarized_json \
+  --language fr \
+  --manifest tmp/prep/meeting/manifest.json \
+  --chunk-index 0 \
+  --out-dir tmp/prep/meeting/transcripts
+```
+
+### Stderr signals
+
+Before each API call:
+```
+[request] X-Client-Request-Id: 550e8400-e29b-41d4-a716-446655440000
+```
+
+After success:
+```
+[done] elapsed_s=127.3 request_id=550e8400-e29b-41d4-a716-446655440000
+```
+
+### Exit codes
+
+| Exit | Category | Meaning |
+|---|---|---|
+| 0 | success | Transcript written |
+| 1 | unknown | Unexpected error |
+| 2 | input | File missing / >25 MB / unreadable |
+| 10 | auth | Invalid API key (401) |
+| 11 | permission | No model access (403/404) |
+| 12 | rate-limit | Quota exceeded (429) |
+| 20 | service | Network / 5xx — connection failed |
+| 21 | timeout | Request accepted, no response within `--timeout` |
+| 30 | bad-request | Invalid parameters or audio format (400) |
+
 ## Error-handling prompt (verbatim — used at runtime)
 
 On non-zero exit, surface the `Error [<category>]:` line plus the `Details:` line, then ask the user:
