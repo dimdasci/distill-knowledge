@@ -602,10 +602,17 @@ def main() -> None:
 
         # Update manifest: done
         if manifest_path and args.chunk_index is not None:
+            # Store path relative to manifest dir so working dir is portable.
+            # merge_chunks.py resolves transcript_file against manifest_path.parent.
+            try:
+                rel = out_path.resolve().relative_to(manifest_path.parent.resolve())
+                transcript_file_value = str(rel)
+            except ValueError:
+                transcript_file_value = str(out_path.resolve())
             _update_manifest(
                 manifest_path, args.chunk_index,
                 status="done",
-                transcript_file=str(out_path),
+                transcript_file=transcript_file_value,
             )
 
 

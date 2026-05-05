@@ -57,6 +57,32 @@ The diarized JSON has its own `segments[]` schema — do not pipe it through `pa
 - `json`: `{"text": "..."}` plus model metadata.
 - `diarized_json`: `segments[]` with `speaker`, `start`, `end`, `text` fields. Use this whenever speaker attribution matters (e.g. when feeding the `convert` skill).
 
+## Prompt-hallucination warning
+
+The non-diarize model (`gpt-4o-transcribe`) accepts `--prompt` and produces noticeably more fluent, term-correct text — at a cost. **Anything in the prompt may be regurgitated as fabricated dialog when the audio is silent, mumbled, or unclear.** This is a known failure mode, not a bug.
+
+Observed leakage from a meeting test where the prompt mentioned domain terms (`payroll`, `EasyBiz`, `RDS`, `Supabase`, `Petya`) and a one-paragraph topic summary:
+
+| Prompt content | Fabricated output |
+|---|---|
+| "Names: …, Petya, …" | "**Хороший вопрос, Петя.**" (no Petya in the audio) |
+| "…modules including payroll…" | "**А что у нас с payroll?**" (payroll never discussed) |
+| "Postgres via RDS, Supabase, Neon" | "**Да, мы работаем с NestJS и Fastify, используя Postgres через RDS, Supabase и Neon.**" (formulaic regurgitation) |
+| "5 migration concerns: monorepo, infra, …" | "**Мы перейдем к обсуждению как перевести наши системы на модульную архитектуру.**" (boilerplate) |
+
+The model uses prompt content as a fallback distribution during low-confidence audio. The richer the prompt, the more material it has to invent from.
+
+### Rules of thumb
+
+- **Vocabulary list + 1-line topic only.** No paragraph summaries, no lists of every participant, no example phrases of "what was likely said".
+- **Names are dangerous.** If you list 7 people in the prompt, expect 1–2 to appear in fabricated turns. Limit to the 2–3 main speakers.
+- **Run a verification pass against a parallel diarize transcription** (the [two-pass flow](chunked-transcription.md#two-pass-text-quality-flow)). The agent's cleanup pass drops sentences that introduce concepts absent from the diarize signal — fabrications are detectable because they don't appear on both sides.
+- **Never use a prompt-only single-pass run as the final transcript.** Always merge against an unprompted source.
+
+### Diarize model rejects `--prompt`
+
+The diarize model (`gpt-4o-transcribe-diarize`) rejects `--prompt` at the API level. This is a constraint, not a workaround opportunity — there is no "diarize + prompted text" single call. For prompted-text quality with speaker labels, use the two-pass flow.
+
 ## Preflight
 
 ```bash
