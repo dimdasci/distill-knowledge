@@ -95,11 +95,18 @@ If `uv --version` fails → run Setup. If `--help` fails with `openai not instal
 ## Timeout and resilience flags
 
 ```bash
-# Override read timeout (default 450s) — useful for very large files or known-slow endpoints
+# Override read timeout (default 450s) — useful for known-slow endpoints
 uv run --script scripts/transcribe_diarize.py \
   audio.wav --model gpt-4o-transcribe-diarize \
   --response-format diarized_json \
   --timeout 600
+
+# Override wall-clock limit (default 600s) — hard kill if server streams
+# bytes without ever completing. Use when API hangs indefinitely.
+uv run --script scripts/transcribe_diarize.py \
+  audio.wav --model gpt-4o-transcribe-diarize \
+  --response-format diarized_json \
+  --max-wall 900
 
 # Skip pre-flight model check (offline tests, already verified)
 uv run --script scripts/transcribe_diarize.py \
@@ -139,7 +146,7 @@ After success:
 | 11 | permission | No model access (403/404) |
 | 12 | rate-limit | Quota exceeded (429) |
 | 20 | service | Network / 5xx — connection failed |
-| 21 | timeout | Request accepted, no response within `--timeout` |
+| 21 | timeout | Request accepted, no response within `--timeout` (read gap) or `--max-wall` (total elapsed) |
 | 30 | bad-request | Invalid parameters or audio format (400) |
 
 ## Error-handling prompt (verbatim — used at runtime)

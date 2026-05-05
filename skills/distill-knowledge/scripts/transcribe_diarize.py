@@ -24,6 +24,7 @@ import os
 import sys
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -78,6 +79,7 @@ MAX_KNOWN_SPEAKERS = 4
 ALLOWED_RESPONSE_FORMATS = {"text", "json", "diarized_json"}
 
 DEFAULT_TIMEOUT = httpx.Timeout(connect=10.0, write=120.0, read=450.0, pool=10.0)
+DEFAULT_MAX_WALL = 600.0  # 10 min hard wall-clock limit per API call
 
 
 def _die(message: str, code: int = 1) -> NoReturn:
@@ -329,6 +331,7 @@ def _run_one(
     payload: dict[str, Any],
     *,
     read_timeout: float | None = None,
+    max_wall: float | None = None,
     request_id: str | None = None,
 ) -> Any:
     # Lazy import so dry-run/preflight paths don't require the SDK loaded.
@@ -344,6 +347,7 @@ def _run_one(
     )
     model = payload.get("model")
     req_id = request_id or str(uuid.uuid4())
+    effective_wall = max_wall if max_wall is not None else DEFAULT_MAX_WALL
 
     # Per-call timeout override
     call_timeout: httpx.Timeout | None = None
@@ -356,7 +360,7 @@ def _run_one(
     print(f"[request] X-Client-Request-Id: {req_id}", file=sys.stderr)
     t0 = time.monotonic()
 
-    try:
+    def _do_call() -> Any:
         with audio_path.open("rb") as audio_file:
             kwargs: dict[str, Any] = {
                 "file": audio_file,
@@ -365,7 +369,24 @@ def _run_one(
             }
             if call_timeout is not None:
                 kwargs["timeout"] = call_timeout
-            result = client.audio.transcriptions.create(**kwargs)
+            return client.audio.transcriptions.create(**kwargs)
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_do_call)
+            try:
+                result = future.result(timeout=effective_wall)
+            except FuturesTimeoutError:
+                elapsed = time.monotonic() - t0
+                _die_api(
+                    "timeout", 21,
+                    f"Wall-clock limit exceeded: {effective_wall:.0f}s "
+                    f"(elapsed {elapsed:.1f}s). request_id={req_id}. "
+                    "The API accepted the request but never completed. "
+                    "Server may be streaming bytes without finishing. "
+                    "Retry, or increase --max-wall if the file is unusually large.\n"
+                    "  Details: ThreadPoolExecutor deadline reached",
+                )
     except AuthenticationError as exc:
         _die_api(
             "auth", 10,
@@ -489,6 +510,13 @@ def main() -> None:
         help="Override read timeout in seconds (default: 450)",
     )
     parser.add_argument(
+        "--max-wall",
+        type=float,
+        default=None,
+        help="Hard wall-clock limit per API call in seconds (default: 600). "
+             "Kills the request if the server streams bytes without completing.",
+    )
+    parser.add_argument(
         "--skip-preflight",
         action="store_true",
         help="Skip the pre-flight model access check",
@@ -575,6 +603,7 @@ def main() -> None:
         result, req_id, elapsed = _run_one(
             client, path, payload,
             read_timeout=args.timeout,
+            max_wall=args.max_wall,
             request_id=req_id,
         )
         output = _format_output(result, args.response_format)
