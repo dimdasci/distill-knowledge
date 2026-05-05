@@ -7,7 +7,7 @@ When `prep_audio.py` splits a recording into chunks (stripped duration > 18 min)
 1. `prep_audio.py` → `stripped.ogg` + `chunks/*.ogg` + `manifest.json`
 2. Per-chunk loop: `transcribe_diarize.py --manifest` (agent reports progress between chunks)
 3. `merge_chunks.py` → `merged.json`
-4. **Cleanup pass — one LLM call.** The agent reads `merged.json` (and, for two-pass jobs, the parallel clean text) and emits the corrected JSON directly. Not a Python script. See [Cleanup Pass](#cleanup-pass-step-44).
+4. **Cleanup pass — you do this directly as language work.** Read `merged.json` (and, for two-pass jobs, the parallel clean text) and emit the corrected JSON yourself in one pass. Not a Python script. See [Cleanup Pass](#cleanup-pass-step-44).
 5. `render_transcript.py` → `transcript.md`
 
 For technical / multilingual / mumbled audio where the diarize model alone produces unusable text, see [Two-pass text-quality flow](#two-pass-text-quality-flow).
@@ -95,9 +95,9 @@ values during merge. The cleanup pass MUST preserve this convention in
 
 ## Cleanup Pass (Step 4.4)
 
-**This is one LLM call. Not a Python script.**
+**This is language work you perform directly. Not a Python script.**
 
-The cleanup pass is language work. The agent (you, in conversation, or a single Anthropic SDK invocation) reads `merged.json` plus any parallel sources (clean-text pass, VTT cues) and emits the corrected JSON directly. Word-overlap heuristics, sentence regex, stopword tables, term-spelling regex — all wrong tools. See the [`Don't write language-processing scripts`](../SKILL.md#anti-patterns) anti-pattern.
+The cleanup pass is language work. You (the agent executing this skill) read `merged.json` plus any parallel sources (clean-text pass, VTT cues) and emit the corrected JSON directly in one pass. Word-overlap heuristics, sentence regex, stopword tables, term-spelling regex — all wrong tools. See the [`Don't write language-processing scripts`](../SKILL.md#anti-patterns) anti-pattern.
 
 ### Inputs
 
@@ -170,7 +170,7 @@ When in doubt, ask the user at Gate 1.
    - Why full audio: the model produces more fluent prose with continuous context, and a single output avoids the chunk-overlap duplication artifact (each chunk's output covers the ~30s overlap region, so chunked text passes produce duplicated content at boundaries).
    - File size check: `stripped.ogg` for a 22-min meeting is ~5 MB; the OpenAI 25 MB limit comfortably covers ~90 min. For longer recordings, transcode to lower bitrate first.
    - Use a **minimal prompt**: vocabulary list + 1-line topic. Avoid summaries, lists of names, example phrases — they leak into the output. See [prompt-hallucination warning](transcribe-cli.md#prompt-hallucination-warning).
-3. **Merge — one LLM call.** Agent reads both `merged.json` and `clean_full.txt`, emits the merged transcript directly per the [Cleanup Pass](#cleanup-pass-step-44) above.
+3. **Merge — you do this directly in one pass.** Read both `merged.json` and `clean_full.txt`, emit the merged transcript yourself per the [Cleanup Pass](#cleanup-pass-step-44) above.
 
 ```bash
 # Pass 1 (per chunk, as usual)
@@ -195,7 +195,7 @@ uv run --script scripts/transcribe_diarize.py \
   --out tmp/prep/<slug>/clean_full.txt
 
 # Merge → cleanup pass: agent reads merged.json + clean_full.txt and produces polished.json
-# (one LLM call, no Python alignment script)
+# (you perform the merge directly, no Python alignment script)
 ```
 
 ## Worked Example
@@ -226,7 +226,7 @@ $ uv run --script scripts/merge_chunks.py \
     --out tmp/prep/workshop-20260504/merged.json
 Wrote tmp/prep/workshop-20260504/merged.json
 
-$ # Cleanup pass — agent reads merged.json and writes polished.json directly (one LLM call).
+$ # Cleanup pass — you read merged.json and write polished.json directly (language work, not a script).
 $ uv run --script scripts/render_transcript.py \
     tmp/prep/workshop-20260504/polished.json \
     --speakers "A=Sarah,B=Mike,C=Lisa" \

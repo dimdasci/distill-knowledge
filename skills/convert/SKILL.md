@@ -9,6 +9,9 @@ description: >-
   what was discussed — even if they just say "process this recording" or
   "what did we talk about in this call."
 compatibility: Requires uv, ffmpeg, ffprobe, Python ≥3.10, and OPENAI_API_KEY (network access to OpenAI API)
+metadata:
+  author: easybiz
+  version: "1.0"
 ---
 
 # Convert Meeting Recording → Knowledge Markdown
@@ -19,7 +22,7 @@ References (load on demand): [output templates](references/output-templates.md) 
 
 ## Setup
 
-Scripts run via [`uv`](https://docs.astral.sh/uv/) (PEP 723, no venv).
+Scripts run via [`uv`](https://docs.astral.sh/uv/) (PEP 723, no venv). All scripts support `--help` for full flag docs (e.g. `uv run --script scripts/merge_chunks.py --help`).
 
 1. **`uv`:** `curl -LsSf https://astral.sh/uv/install.sh | sh`
 2. **Verify `ffmpeg` + `ffprobe`:**
@@ -79,9 +82,9 @@ If the audio is **technical / multilingual / mumbled** (engineering call, mixed-
    1. Run [scripts/render_transcript.py](scripts/render_transcript.py) `--samples <json>` — show the user the longest 1–2 substantive segments per detected speaker.
    2. User names speakers (or confirms `A`/`B`/`C` if no preference).
    3. **Short path:** Run [scripts/render_transcript.py](scripts/render_transcript.py) `<json> --speakers A=Name1,B=Name2 --out outbox/{meeting-slug}/transcript.md` — emits the cleaned transcript with speaker labels, dropping hallucinations and empty turns.
-   4. **Long path (after `merge_chunks.py`):** Cleanup pass — **one LLM call**, not a Python script. Agent reads `merged.json` (and, in two-pass mode, the parallel `clean_full.txt`) and writes `polished.json` directly. See [Cleanup Pass](references/chunked-transcription.md#cleanup-pass-step-44). Then render `polished.json` via `render_transcript.py`.
-5. **Cleaned transcript (mandatory)** — produced by step 4.3 or 4.4 above. Cue: `**Alice** [0:00:12]: ...`. Faithful to **meaning**, not to ASR letters: repair garbled spans where the speaker's intent is recoverable from context or a parallel clean pass; never invent content. See [fidelity rule](#fidelity-rule).
-6. **Screenshots inline** — skip if no screen content; else `timestamp + 2 s`, `-q:v 2`, inline at cue. Source video path from `manifest.json` `source` field.
+   4. **Long path (after `merge_chunks.py`):** Cleanup pass — **you do this directly as language work**, not a Python script. Read `merged.json` (and, in two-pass mode, the parallel `clean_full.txt`) and write `polished.json` yourself in one pass. See [Cleanup Pass](references/chunked-transcription.md#cleanup-pass-step-44). Then render `polished.json` via `render_transcript.py`.
+5. **Cleaned transcript (mandatory)** — produced by step 4.3 or 4.4 above. For the exact markdown shape, see [output templates § transcript.md](references/output-templates.md#step-4--transcriptmd-shape). Faithful to **meaning**, not to ASR letters: repair garbled spans where the speaker's intent is recoverable from context or a parallel clean pass; never invent content. See [fidelity rule](#fidelity-rule).
+6. **Screenshots inline** — skip if no screen content; else `timestamp + 2 s`, `-q:v 2`, inline at cue. Source video path from `manifest.json` `source` field. For inline link format, see [output templates § screenshots](references/output-templates.md#step-5--screenshots--inline-link-shape).
 7. **Gate 2** — structured docs or transcript only?
 8. **Plan structure** — topics, decisions, actions, open questions, pain points, proposals.
 9. **Gate 3 + emit** `summary.md`, `topics/{slug}.md` (default/process), Mermaid for flow/decision shots.
@@ -116,19 +119,7 @@ If the audio is **technical / multilingual / mumbled** (engineering call, mixed-
 
 ## Error handling
 
-CLI exits non-zero with stderr `Error [<category>]: <message>`. SDK already retried transient errors.
-
-| Exit | Category, cause, action |
-|---|---|
-| 0 | success — continue |
-| 1 | unknown — abort, surface stderr |
-| 2 | input (missing / >25 MB / unreadable) — abort, ask user to fix |
-| 10 | auth (401) — **Stop. Ask for valid key. Wait, re-run.** No silent retry. |
-| 11 | permission (403/404) — **Stop. Quote failing model. Ask user to grant access or pick another. Wait, re-run.** |
-| 12 | rate-limit (429) — link `platform.openai.com/usage`; ask: **wait+retry, or cancel?** |
-| 20 | service (network / 5xx) — link `status.openai.com`; ask: **wait+retry, or cancel?** |
-| 21 | timeout (request accepted, no response in time) — surface `request_id`; ask: **retry with `--timeout <larger>`, or cancel?** |
-| 30 | bad-request (400) — abort, surface `Details:`, ask user to re-encode |
+CLI exits non-zero with stderr `Error [<category>]: <message>`. SDK already retried transient errors. For the full exit-code table and per-category recovery actions, see [transcribe CLI § exit codes](references/transcribe-cli.md#exit-codes).
 
 **Default on non-zero exit** — surface `Error [<category>]:` + `Details:`, then ask:
 
@@ -149,23 +140,8 @@ When in doubt: when two transcripts of the same audio agree on the meaning, that
 
 ## Anti-patterns
 
-- **Don't skip the cleaned transcript.** Never optional.
-- **Don't fabricate.** Inventing dialog the speaker didn't say is the worst failure mode of this skill — worse than a garbled transcript. See [fidelity rule](#fidelity-rule). Repairing recoverable garble is fine; inventing is not.
-- **Don't write language-processing scripts.** When you find yourself reaching for `difflib.SequenceMatcher`, word-overlap thresholds, stopword filters, sentence-level regex, or term-spelling regex tables to do the cleanup pass — stop. The cleanup pass is **language work**: one LLM call (you, in conversation, or one Anthropic SDK invocation reading both transcripts and emitting the merged result). Python scripts in this skill are I/O plumbing only — audio prep, API calls, manifest tracking, markdown rendering. Never semantic work.
-- **Don't write outside `outbox/{meeting-slug}/`.**
-- **Don't structure without approval** (Gate 2 + Gate 3).
-- **Don't screenshot everything.** Visual must add what text doesn't.
-- **Don't transcribe a usable VTT.** Cheapest source of truth.
-- **Don't fabricate screen content.** Unclear → mark it.
-- **Don't run the next skill.** Stop after Step 10.
-- **Don't transcribe before intake** (language / speakers / topic / terms).
-- **Don't write ad-hoc renderers** (jq / sed / awk / inline scripts) — use [scripts/render_transcript.py](scripts/render_transcript.py).
-- **Don't paste the API key in chat or commit it.**
-- **Don't request `diarized_json` from a non-diarize model** — rejected.
-- **Don't pass `--prompt` to the diarize model** — unsupported.
-- **Don't load a rich `--prompt` (paragraphs, lists of names, example phrases) on the non-diarize model.** Anything in the prompt may surface as fabricated dialog during silent / unclear audio. Keep prompts to a vocabulary list + a 1-line topic. See [prompt-hallucination warning](references/transcribe-cli.md#prompt-hallucination-warning).
-- **Don't send files >25 MB** — split or transcode first.
-- **Don't run with `python3`** — PEP 723 deps need `uv run --script`.
-- **Don't auto-pick a VTT path.** Always surface VTT assessment and let user confirm at Gate 1.
-- **Don't override API speaker labels with VTT speaker labels.** VTT text may restore gaps; VTT speakers never override.
-- **Don't skip the cleanup pass on chunked inputs.** Step 4.4 is mandatory after `merge_chunks.py`.
+- **Don't fabricate.** Inventing dialog the speaker didn't say is the worst failure mode of this skill — worse than a garbled transcript. Repairing recoverable garble is fine; inventing is not. See [fidelity rule](#fidelity-rule).
+- **Don't write language-processing scripts or ad-hoc renderers.** When you find yourself reaching for `difflib.SequenceMatcher`, word-overlap thresholds, regex tables, jq, sed, or awk to do the cleanup pass or render output — stop. The cleanup pass is **language work that you perform directly**. Rendering goes through [scripts/render_transcript.py](scripts/render_transcript.py). Python scripts in this skill are I/O plumbing only — never semantic work.
+- **Don't load a rich `--prompt` on the non-diarize model.** Anything in the prompt may surface as fabricated dialog during silent / unclear audio. Keep prompts to a vocabulary list + a 1-line topic. See [prompt-hallucination warning](references/transcribe-cli.md#prompt-hallucination-warning).
+- **Don't auto-pick VTT decisions or override API speaker labels.** Always surface VTT assessment and let the user confirm at Gate 1. VTT text may restore gaps, but VTT speaker labels never override API-assigned ones.
+- **Don't write outside `outbox/{meeting-slug}/`.** Temporary files go in `tmp/`; final artifacts go in `outbox/`.

@@ -1,0 +1,47 @@
+{
+  "skill_name": "convert",
+  "notes": "Test audio files not committed (too large). Place samples in evals/files/ to run.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "transcribe this meeting recording at inbox/short-sync.m4a. Language: en, 2 speakers, topic: sprint planning, terms: Jira, Confluence.",
+      "expected_output": "A markdown transcript with speaker labels, timestamps, and metadata header in outbox/short-sync-*/transcript.md.",
+      "files": ["evals/files/short-sync.m4a"],
+      "assertions": [
+        "Output file exists at outbox/*/transcript.md",
+        "Transcript contains bold speaker labels (** pattern)",
+        "Timestamps are present and monotonically increasing",
+        "Metadata header includes source, language, and speakers fields",
+        "No hallucination blacklist phrases appear in output (e.g. 'Thanks for watching', 'Субтитры')",
+        "Agent asked intake questions before transcribing"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "process this recording inbox/long-workshop.mp4. Language: ru, 3 speakers, topic: backend architecture, terms: NestJS, Fastify, Postgres, Render.",
+      "expected_output": "A chunked transcription producing a merged and cleaned transcript with 3 named speakers.",
+      "files": ["evals/files/long-workshop.mp4"],
+      "assertions": [
+        "prep_audio.py was invoked and produced manifest.json",
+        "Multiple chunks were transcribed (manifest shows n_chunks > 1)",
+        "merge_chunks.py was invoked producing merged.json",
+        "A cleanup pass was performed (polished.json exists or transcript reflects merged content)",
+        "Final transcript.md has 3 distinct speaker labels",
+        "No fabricated content from prompt terms appearing in turns where topic wasn't discussed"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I have a Zoom recording with a VTT subtitle file. Process inbox/zoom-call.mp4 and inbox/zoom-call.vtt. Language: en, 2 speakers, topic: onboarding review.",
+      "expected_output": "Agent assesses VTT quality at Gate 1, recommends a path (VTT-only or re-transcribe), and produces transcript.md.",
+      "files": ["evals/files/zoom-call.mp4", "evals/files/zoom-call.vtt"],
+      "assertions": [
+        "parse_vtt.py was invoked on the VTT file",
+        "Agent presented a VTT quality assessment to the user",
+        "Agent asked user to confirm VTT outcome at Gate 1",
+        "Final transcript.md exists in outbox/",
+        "If VTT was usable, no API transcription call was made"
+      ]
+    }
+  ]
+}

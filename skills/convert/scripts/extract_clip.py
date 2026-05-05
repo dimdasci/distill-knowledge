@@ -27,6 +27,7 @@ Defaults:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -87,7 +88,8 @@ def main() -> int:
         print(f"ffmpeg failed: {res.stderr.strip()}", file=sys.stderr)
         return res.returncode
 
-    print(f"Wrote {out} ({args.duration:.1f}s @ {args.at:.1f}s)")
+    print(json.dumps({"path": str(out), "start_s": args.at, "duration_s": args.duration}))
+    print(f"Wrote {out} ({args.duration:.1f}s @ {args.at:.1f}s)", file=sys.stderr)
     return 0
 
 
