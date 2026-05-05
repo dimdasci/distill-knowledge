@@ -4,7 +4,7 @@
 docs/
 .ruff_cache/
 inbox/
-outbox/tmp/
+outbox/
 skills/convert/eval/report.json
 skills/convert/scripts/tests/probe_*.py
 skills/convert/scripts/tests/explore_*.py
