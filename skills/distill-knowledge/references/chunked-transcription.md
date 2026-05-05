@@ -166,9 +166,10 @@ When in doubt, ask the user at Gate 1.
 ### Pipeline
 
 1. **Pass 1 — diarize for skeleton** (per chunk, as standard). Produces speaker labels + timestamps. Text quality may be poor.
-2. **Pass 2 — non-diarize for text** on the **full `stripped.ogg`**, not chunked.
-   - Why full audio: the model produces more fluent prose with continuous context, and a single output avoids the chunk-overlap duplication artifact (each chunk's output covers the ~30s overlap region, so chunked text passes produce duplicated content at boundaries).
-   - File size check: `stripped.ogg` for a 22-min meeting is ~5 MB; the OpenAI 25 MB limit comfortably covers ~90 min. For longer recordings, transcode to lower bitrate first.
+2. **Pass 2 — non-diarize for text** on `stripped.ogg`.
+   - **≤18 min stripped:** single call on full `stripped.ogg` (preferred — continuous context produces more fluent prose, avoids chunk-overlap duplication).
+   - **>18 min stripped:** chunk Pass 2 the same way as Pass 1 (reuse the same chunks from `prep_audio.py`). The API rejects audio longer than ~18 min regardless of file size. Run `transcribe_diarize.py` per chunk with `--model gpt-4o-transcribe --response-format text`, concatenate outputs into `clean_full.txt`.
+   - File size per chunk must be ≤25 MB. At Opus 32k mono (~240 KB/min), 18 min ≈ 4.3 MB — always safe. Only re-encode if source chunks are unusually large (e.g. high-bitrate WAV input).
    - Use a **minimal prompt**: vocabulary list + 1-line topic. Avoid summaries, lists of names, example phrases — they leak into the output. See [prompt-hallucination warning](transcribe-cli.md#prompt-hallucination-warning).
 3. **Merge — you do this directly in one pass.** Read both `merged.json` and `clean_full.txt`, emit the merged transcript yourself per the [Cleanup Pass](#cleanup-pass-step-44) above.
 
@@ -186,13 +187,25 @@ uv run --script scripts/merge_chunks.py \
   --intake '{...}' \
   --out tmp/prep/<slug>/merged.json
 
-# Pass 2 (one call on full stripped audio)
+# Pass 2 (non-diarize for clean text)
+# Short audio (≤18 min): one call on full stripped.ogg
 uv run --script scripts/transcribe_diarize.py \
   tmp/prep/<slug>/stripped.ogg \
   --model gpt-4o-transcribe --response-format text \
   --language ru \
   --prompt "Terms: NestJS, Fastify, Postgres, Render, Railway, KYC. Names: Alice, Bob. Topic: backend architecture." \
   --out tmp/prep/<slug>/clean_full.txt
+
+# Long audio (>18 min): per-chunk, same chunks as Pass 1
+# for i in 0 1 2; do
+#   uv run --script scripts/transcribe_diarize.py \
+#     tmp/prep/<slug>/chunks/chunk_0${i}.ogg \
+#     --model gpt-4o-transcribe --response-format text \
+#     --language ru \
+#     --prompt "Terms: NestJS, Fastify, Postgres. Topic: backend architecture." \
+#     --out tmp/prep/<slug>/clean_chunks/chunk_0${i}.txt
+# done
+# cat tmp/prep/<slug>/clean_chunks/chunk_*.txt > tmp/prep/<slug>/clean_full.txt
 
 # Merge → cleanup pass: agent reads merged.json + clean_full.txt and produces polished.json
 # (you perform the merge directly, no Python alignment script)

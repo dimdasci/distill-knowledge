@@ -53,8 +53,8 @@ Technical / multilingual / mumbled audio (engineering calls, mixed-language, thi
 
 3. **Preprocess + transcribe** — run [prep_audio.py](scripts/prep_audio.py) on input (audio or video; extracts audio in-pass; source video retained for screenshots).
    - ≤18 min stripped → single `transcribe_diarize.py` call on `stripped.ogg`
-   - \>18 min → per-chunk loop with `--manifest --chunk-index N`; report progress between chunks; then `merge_chunks.py` (+ `--vtt` iff Gate 1). See [chunked transcription](references/chunked-transcription.md).
-   - \>25 MB stripped → re-encode lower bitrate first (Opus 32k mono ≈ 240 KB/min)
+   - \>18 min → per-chunk loop with `--manifest --chunk-index N`; report progress between chunks; then `merge_chunks.py` (+ `--vtt` iff Gate 1). **Both passes** (diarize and text) must chunk at ≤18 min — the API rejects audio longer than ~18 min regardless of file size. See [chunked transcription](references/chunked-transcription.md).
+   - \>25 MB per chunk → re-encode lower bitrate (Opus 32k mono ≈ 240 KB/min; 18 min chunk ≈ 4.3 MB — normally not an issue)
 
    Model choice:
 
@@ -62,7 +62,7 @@ Technical / multilingual / mumbled audio (engineering calls, mixed-language, thi
    |---|---|---|---|
    | 1 | `gpt-4o-transcribe` | vocab + 1-line topic only | no |
    | 2+ | `gpt-4o-transcribe-diarize` | rejected by API | yes |
-   | 2+, technical/mumbled | both: diarize skeleton + `gpt-4o-transcribe` full audio (minimal prompt) + LLM merge | text pass only | skeleton |
+   | 2+, technical/mumbled | both: diarize skeleton + `gpt-4o-transcribe` (per chunk if >18 min, minimal prompt) + LLM merge | text pass only | skeleton |
 
    `--language` required on every call. On non-zero exit → surface stderr `Error [<category>]:`, ask wait/cancel. See [exit codes](references/transcribe-cli.md#exit-codes).
 
