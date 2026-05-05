@@ -1,7 +1,11 @@
+.DS_Store
 .env
+.claude/
 docs/
 .ruff_cache/
 inbox/
 outbox/tmp/
 skills/convert/eval/report.json
+skills/convert/scripts/tests/probe_*.py
+skills/convert/scripts/tests/explore_*.py
 tmp/
