@@ -525,6 +525,8 @@ def main() -> None:
         _die("diarized_json requires gpt-4o-transcribe-diarize")
     if args.manifest and args.chunk_index is None:
         _die("--chunk-index is required when using --manifest")
+    if args.manifest and len(args.audio) > 1:
+        _die("--manifest only supports a single audio file (one chunk per invocation)")
 
     _check_runner()
     _ensure_api_key(args.dry_run)

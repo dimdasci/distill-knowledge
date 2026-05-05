@@ -6,7 +6,8 @@
 """Merge per-chunk transcription JSONs into a unified timeline.
 
 Produces merged.json with:
-- segments[] — all chunks' segments in chronological order
+- segments[] — all chunks' segments in chronological order, with `start`/`end`
+  rewritten to absolute (global) seconds; `source_chunk` and `in_overlap` added
 - overlap_windows[] — side-by-side segments from adjacent chunks in shared regions
 - chunk_boundaries[] — where chunks meet
 - intake_context — pass-through from CLI
@@ -50,6 +51,14 @@ def _load_chunk_segments(manifest: dict, manifest_dir: Path) -> list[list[dict]]
     """Load segments from each chunk's transcript file."""
     all_segments: list[list[dict]] = []
     for chunk in manifest["chunks"]:
+        status = chunk.get("status")
+        if status != "done":
+            _die(
+                f"Chunk {chunk['index']} status is {status!r} (expected 'done'). "
+                "Re-run `transcribe_diarize.py --manifest --chunk-index "
+                f"{chunk['index']}` and merge again.",
+                2,
+            )
         transcript_file = chunk.get("transcript_file")
         if not transcript_file:
             _die(f"Chunk {chunk['index']} has no transcript_file in manifest", 2)
@@ -76,7 +85,12 @@ def _annotate_segments(
     segments: list[dict],
     chunk: dict,
 ) -> list[dict]:
-    """Add absolute timestamps and overlap annotations to segments."""
+    """Rewrite segment timestamps to the global timeline.
+
+    `start` and `end` are overwritten with absolute (global) seconds so
+    downstream consumers (render_transcript.py, the cleanup pass) see one
+    consistent timeline. Adds `source_chunk` and `in_overlap` annotations.
+    """
     chunk_start = chunk["chunk_start_s"]
     core_start = chunk["core_start_s"]
     core_end = chunk["core_end_s"]
@@ -85,13 +99,11 @@ def _annotate_segments(
 
     annotated = []
     for seg in segments:
-        # Compute absolute times from chunk-relative times
         seg_start = seg.get("start", 0.0)
         seg_end = seg.get("end", 0.0)
-        abs_start = chunk_start + seg_start
-        abs_end = chunk_start + seg_end
+        abs_start = round(chunk_start + seg_start, 3)
+        abs_end = round(chunk_start + seg_end, 3)
 
-        # Determine overlap status
         in_overlap = None
         if abs_start < core_start:
             in_overlap = "prev"
@@ -100,8 +112,8 @@ def _annotate_segments(
 
         annotated.append({
             **seg,
-            "absolute_start": round(abs_start, 3),
-            "absolute_end": round(abs_end, 3),
+            "start": abs_start,
+            "end": abs_end,
             "source_chunk": chunk_index,
             "in_overlap": in_overlap,
         })
@@ -127,16 +139,16 @@ def _build_overlap_windows(
         shared_start = boundary - overlap_s
         shared_end = boundary + overlap_s
 
-        # Left segments in shared region
+        # Left segments in shared region (timestamps are now absolute)
         left_segs = [
             seg for seg in all_annotated[i]
-            if seg["absolute_end"] > shared_start and seg["absolute_start"] < shared_end
+            if seg["end"] > shared_start and seg["start"] < shared_end
         ]
 
         # Right segments in shared region
         right_segs = [
             seg for seg in all_annotated[i + 1]
-            if seg["absolute_end"] > shared_start and seg["absolute_start"] < shared_end
+            if seg["end"] > shared_start and seg["start"] < shared_end
         ]
 
         windows.append({
@@ -226,7 +238,7 @@ def main() -> None:
     all_segments: list[dict] = []
     for annotated in all_annotated:
         all_segments.extend(annotated)
-    all_segments.sort(key=lambda s: s["absolute_start"])
+    all_segments.sort(key=lambda s: s["start"])
 
     # Detect language from first chunk or intake
     language = intake_context.get("language", "")

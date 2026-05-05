@@ -10,6 +10,24 @@ When `prep_audio.py` splits a recording into chunks (stripped duration > 18 min)
 4. Agent cleanup pass → `polished.json` + `edits.json`
 5. `render_transcript.py` → `transcript.md`
 
+## Resume / retry contract
+
+A chunk is "needs work" iff its manifest `status != "done"`. Possible values
+written by `transcribe_diarize.py`:
+
+| `status` | Meaning |
+|---|---|
+| `pending` | Set by `prep_audio.py`. Never transcribed. |
+| `in_progress` | Transcription started; the script exited before writing `done` (success path) — likely an error. The chunk's `request_id` is set. |
+| `done` | Transcript written and `transcript_file` populated. |
+
+On any failure the script exits with the matching error code (see
+[transcribe-cli.md](transcribe-cli.md)) and **does not** write `failed` to the
+manifest — the stderr `Error [<category>]:` line is the source of truth. To
+resume after a failure, the agent re-invokes `transcribe_diarize.py
+--manifest --chunk-index N` for every chunk where `status != "done"`. Already
+`done` chunks are not re-transcribed.
+
 ## merge_chunks.py CLI
 
 ```bash
@@ -26,6 +44,14 @@ uv run --script scripts/merge_chunks.py \
   --out tmp/prep/<slug>/merged.json
 ```
 
+## Timestamp convention
+
+All `start` / `end` fields in `merged.json` are **absolute seconds on the
+global timeline** (not chunk-relative). `merge_chunks.py` rewrites the
+chunk-relative timestamps from `transcribe_diarize.py` outputs into absolute
+values during merge. The cleanup pass MUST preserve this convention in
+`polished.json` so `render_transcript.py` produces correct global timestamps.
+
 ## merged.json schema
 
 ```json
@@ -40,8 +66,8 @@ uv run --script scripts/merge_chunks.py \
   },
   "segments": [
     {
-      "absolute_start": 12.4,
-      "absolute_end": 18.7,
+      "start": 12.4,
+      "end": 18.7,
       "speaker": "A",
       "text": "...",
       "source_chunk": 0,
