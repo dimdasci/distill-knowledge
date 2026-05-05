@@ -29,7 +29,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 QUERIES_FILE="${SCRIPT_DIR}/queries.json"
-SKILL_NAME="convert"
+SKILL_NAME="distill-knowledge"
 RUNS=3
 SPLIT=""
 THRESHOLD=0.5
@@ -98,10 +98,11 @@ check_triggered_pi() {
   # pi --mode json streams JSONL events. Skill activation = model reads SKILL.md.
   pi --mode json --no-session --skill "$SKILL_DIR" -p "$query" 2>/dev/null \
     | jq -e --slurp --arg skill_dir "$SKILL_DIR" \
-      'any(.[];
+      'any(.[]; 
         .type == "tool_execution_start" and
         .toolName == "read" and
-        (.args.path | tostring | test("SKILL\\.md"))
+        (.args.path | tostring | startswith($skill_dir)) and
+        (.args.path | tostring | test("SKILL\\.md$"))
       )' \
       > /dev/null 2>&1
 }

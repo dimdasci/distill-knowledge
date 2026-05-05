@@ -1,0 +1,34 @@
+{
+  "agent": "pi",
+  "skill": "distill-knowledge",
+  "skill_dir": "/Users/dim/contexts/easybiz/projects/meetings-to-docs/skills/distill-knowledge",
+  "runs_per_query": 1,
+  "threshold": 0.5,
+  "split": "all",
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0
+  },
+  "failures": [],
+  "results": [
+    {
+      "id": "t07",
+      "query": "process this recording inbox/weekly-sync.mp4",
+      "should_trigger": true,
+      "triggers": 1,
+      "runs": 1,
+      "trigger_rate": 1.00,
+      "passed": true
+    },
+    {
+      "id": "n02",
+      "query": "convert this mp4 to mp3 for me, I just need the audio track",
+      "should_trigger": false,
+      "triggers": 0,
+      "runs": 1,
+      "trigger_rate": 0.00,
+      "passed": true
+    }
+  ]
+}
