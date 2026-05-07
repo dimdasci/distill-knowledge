@@ -29,6 +29,36 @@ The skill follows the [Agent Skills open standard](https://agentskills.io/) — 
 
 The skill checks all of these on first run.
 
+### Install uv
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh   # macOS, Linux
+brew install uv                                    # macOS, Homebrew
+pipx install uv                                    # any platform with pipx
+```
+
+Windows or alternatives: see <https://docs.astral.sh/uv/getting-started/installation/>.
+
+### Install ffmpeg
+
+```bash
+brew install ffmpeg                # macOS
+sudo apt install ffmpeg            # Debian, Ubuntu
+sudo dnf install ffmpeg            # Fedora
+choco install ffmpeg               # Windows (Chocolatey)
+```
+
+`ffprobe` ships inside the same package.
+
+### Set the OpenAI API key
+
+The skill picks the key up automatically from either source — no extra wiring:
+
+- **Shell environment** — `export OPENAI_API_KEY=sk-...` in your shell rc, or set it inline before invoking the agent.
+- **Project `.env`** — create a `.env` file in the directory you run the agent from (or any parent), with `OPENAI_API_KEY=sk-...` on its own line. The skill walks up the directory tree to find it.
+
+If both are set, the shell variable wins. Never commit `.env` — keep it gitignored.
+
 ## How to use
 
 1. Drop the recording in `inbox/`. Audio or video. If you have a `.vtt` next to it, leave it there — the skill uses it as a speaker-aligned skeleton.
