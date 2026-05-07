@@ -1,4 +1,4 @@
-# meetings-to-docs
+# distill-knowledge
 
 An [Agent Skill](https://skills.sh) that turns recorded meetings into speaker-labelled markdown transcripts, optionally with screenshots and topic-by-topic documents.
 
@@ -7,10 +7,10 @@ Built for knowledge handovers, interviews, screen-share walkthroughs, and voice 
 ## Install
 
 ```bash
-npx skills add dim-kharitonov/meetings-to-docs
+npx skills add dimdasci/distill-knowledge
 ```
 
-This drops `distill-knowledge` into your agent's skills directory. Works with Claude Code and any other agent that reads the [Agent Skills](https://skills.sh) format.
+This drops the skill into your agent's skills directory. Works with Claude Code and any other agent that reads the [Agent Skills](https://skills.sh) format.
 
 Manual install: clone this repo, copy `skills/distill-knowledge/` into your agent's skills folder.
 
@@ -125,6 +125,8 @@ The block below is a synthetic excerpt with placeholder screenshots. In real out
 | `tmp/` | Preprocessing intermediates (chunks, manifests). Safe to delete. |
 | `eval/` | Trigger-evaluation harness — checks that the skill activates on the right prompts |
 | `docs/assets/` | Placeholder images used in this README |
+
+The published GitHub repo is named `distill-knowledge` to match the skill (skills.sh convention). The local working dir may differ.
 
 ## Two transcription paths
 
