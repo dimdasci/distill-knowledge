@@ -1,6 +1,6 @@
 # Distill knowledge from meetings, interviews, and screen-shares
 
-An [Agent Skill](https://skills.sh) that turns recorded meetings into speaker-labelled markdown transcripts, optionally with screenshots and topic-by-topic documents.
+An [Agent Skill](https://agentskills.io/) that turns recorded meetings into speaker-labelled markdown transcripts, optionally with screenshots and topic-by-topic documents.
 
 Built for knowledge handovers, interviews, screen-share walkthroughs, and voice notes — anything where the value is in what was said, not in the audio.
 
@@ -12,9 +12,11 @@ The point of the skill is to draw a clean line between **deterministic work** �
 npx skills add dimdasci/distill-knowledge
 ```
 
-This drops the skill into your agent's skills directory. Works with Claude Code and any other agent that reads the [Agent Skills](https://skills.sh) format.
+This drops the skill into your agent's skills directory.
 
 Manual install: clone this repo, copy `skills/distill-knowledge/` into your agent's skills folder.
+
+The skill follows the [Agent Skills open standard](https://agentskills.io/) — originally developed by Anthropic, now an open spec adopted by Claude Code, Gemini CLI, Cursor, OpenCode, Goose, GitHub Copilot, OpenAI Codex, and many other agents. Any compliant agent will pick it up.
 
 ## Prerequisites
 
