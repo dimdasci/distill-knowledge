@@ -10,8 +10,8 @@ description: >-
 compatibility: Requires uv, ffmpeg, ffprobe, Python ≥3.10, and OPENAI_API_KEY (network access to OpenAI API)
 license: MIT
 metadata:
-  author: dim-kharitonov
-  version: "1.0"
+  author: Dim Kharitonov <dimds@fastmail.com> (https://github.com/dimdasci)
+  version: "1.0.0"
 ---
 
 # Convert Recording → Knowledge Markdown
