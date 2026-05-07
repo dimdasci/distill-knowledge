@@ -1,4 +1,4 @@
-# distill-knowledge
+# Distill knowledge from meetings, interviews, and screen-shares
 
 An [Agent Skill](https://skills.sh) that turns recorded meetings into speaker-labelled markdown transcripts, optionally with screenshots and topic-by-topic documents.
 
@@ -63,8 +63,9 @@ outbox/process-handover-20260420/
 ├── transcript.md           # full transcript, faithful to the source language
 ├── topics/
 │   ├── 01-big-picture.md
-│   ├── 02-new-client-signal.md
-│   ├── 03-pricing-reference.md
+│   ├── 02-receiving-tickets.md
+│   ├── 03-priority-rules.md
+│   ├── 04-triage-workflow.md
 │   └── ...
 └── screenshots/
     ├── 01.jpg
@@ -82,32 +83,33 @@ The block below is a synthetic excerpt with placeholder screenshots. In real out
 
 ---
 
-> ### Step 5 — Setting up the company file
+> ### Step 5 — Triaging an incoming ticket
 >
 > #### What it is
 >
-> The dashboard is where a new client is registered before any monthly invoice can run. Three fields are mandatory to enable billing: name, address, contact person.
+> The triage queue is where every new customer message lands before it reaches an agent. The triager assigns priority, owner, and tags before the ticket leaves the queue.
 >
 > #### What you do
 >
-> 1. Open the dashboard → find the company in the `Companies` list.
-> 2. Read the `Onboarding` tab. Most data should already be there.
-> 3. Click `Company info`. Fill any field that is empty.
-> 4. If the company is **in incorporation**, type `(In Incorporation)` after the name. Without this tag, billing rejects the company.
-> 5. Save. Confirm the read-only view shows everything correctly.
+> 1. Open the help-desk → switch to the `Queue` view → filter by `status = New`.
+> 2. Open the oldest unassigned ticket.
+> 3. Read the customer message. Skim the customer's history in the right panel.
+> 4. Set Priority (`Low / Normal / High / Urgent`) and at least one Tag — without a tag the SLA timer is hidden.
+> 5. If the issue matches a known engineering bug, fill `Linked issue` so the ticket auto-routes to the right team.
+> 6. Click `Assign` and pick the agent. Save.
 >
 > #### What you see
 >
 > ![Screenshot 12](docs/assets/example-screenshot-01.png)
-> **Screenshot 12 — `Company info` edit form for Acme Holding.** Header: *"New company — Company info"*, subtitle *"Acme Holding S.à r.l. (In Incorporation)"*. Fields visible top to bottom: Client reference (`901908`, auto-populated), BOB-equivalent dossier (empty), VAT ID (empty), RCS number (empty), Financial year (`31.12.`), Address (empty), Contact person (empty). Left sidebar: `Companies | Invoices | Tasks | Settings`.
+> **Screenshot 12 — Ticket detail view, TKT-4821.** Header *"TKT-4821 — Cannot export report to CSV"*; status pills below: `Open · High · Billing team`. Form fields top to bottom: Subject (`Cannot export report to CSV`), Customer (`Lina Park — Borealis Studio`), Priority (`High`), Status (`Open`), Assignee (empty), Linked issue (empty), Tags (empty). Left sidebar: `Inbox | Queue | Customers | Reports | Settings`.
 >
 > ![Screenshot 13](docs/assets/example-screenshot-02.png)
-> **Screenshot 13 — Monthly invoices view, April 2026.** Header: *"Monthly invoices — April 2026"*, *"12 drafts pending review"*. Table columns: Client, Plan, Amount, Status. Rows visible: Acme Holding (Standard, €450, Draft), Borealis Trade (Premium, €890, Draft), Ceres Studio (Standard, €450, Approved), Delta Atelier (Payroll+, €1,210, Draft), Echo Logistics (Standard, €450, Draft), Forge & Sons (Starter, €220, Draft).
+> **Screenshot 13 — Triage queue view.** Header *"Triage queue — 24 unassigned"*, filter line *"status = New · sort by oldest"*. Table columns: ID, Subject, Customer, Priority, Status. Rows visible: TKT-4821 (Cannot export report to CSV, Borealis Studio, High, New), TKT-4822 (2FA email not arriving, Ceres Logistics, Urgent, New), TKT-4823 (Wrong totals on dashboard, Delta Atelier, Normal, New), TKT-4824 (Bulk import stuck at 30%, Echo Robotics, High, New), TKT-4825 (How do I invite a colleague?, Forge & Sons, Low, New), TKT-4826 (API key rotated unexpectedly, Helix Foods, Urgent, New).
 >
 > #### Things to watch out for
 >
-> - Always tag `(In Incorporation)` on companies that are not yet registered. The platform refuses to bill unregistered companies.
-> - The address field is the one most often missing. Order of fallbacks: Onboarding tab → public registry → CRM → original engagement letter.
+> - Tickets with no Tags are hidden from the SLA timer. Always set at least one tag before saving.
+> - The "Internal note" toggle in the reply box defaults to OFF — double-check before pasting customer-facing text.
 >
 > #### Source
 >
