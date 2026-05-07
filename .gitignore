@@ -1,7 +1,8 @@
 .DS_Store
 .env
 .claude/
-docs/
+docs/*
+!docs/assets/
 .ruff_cache/
 inbox/
 outbox/
