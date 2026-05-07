@@ -29,7 +29,9 @@ The skill follows the [Agent Skills open standard](https://agentskills.io/) — 
 
 The skill checks all of these on first run.
 
-### Install uv
+### How to install the tools
+
+#### Install uv
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh   # macOS, Linux
@@ -39,7 +41,7 @@ pipx install uv                                    # any platform with pipx
 
 Windows or alternatives: see <https://docs.astral.sh/uv/getting-started/installation/>.
 
-### Install ffmpeg
+#### Install ffmpeg
 
 ```bash
 brew install ffmpeg                # macOS
@@ -50,7 +52,7 @@ choco install ffmpeg               # Windows (Chocolatey)
 
 `ffprobe` ships inside the same package.
 
-### Set the OpenAI API key
+#### Set the OpenAI API key
 
 The skill picks the key up automatically from either source — no extra wiring:
 
