@@ -4,6 +4,8 @@ An [Agent Skill](https://skills.sh) that turns recorded meetings into speaker-la
 
 Built for knowledge handovers, interviews, screen-share walkthroughs, and voice notes — anything where the value is in what was said, not in the audio.
 
+The point of the skill is to draw a clean line between **deterministic work** — audio normalisation, video → audio, chunking, VTT parsing, API calls, frame extraction — handled by the included scripts, and **language work** — picking the transcription path, naming speakers, judging what to repair or mark unclear, choosing which moments deserve a screenshot, and shaping the final document — done by the agent itself. Scripts move bytes; the agent decides meaning and structure.
+
 ## Install
 
 ```bash
@@ -73,13 +75,13 @@ outbox/process-handover-20260420/
     └── ...
 ```
 
-`summary.md` lists who is who (built from screenshots and transcript), the big picture in one paragraph, and a table of every topic with a one-line description. It is the page you read first.
+The shape above is what the agent chose for *this* prompt — it is not a template the skill enforces. The skill does not prescribe section names, file counts, or filenames. A different prompt yields a different structure: a single flat document, an FAQ, a checklist, a slide-by-slide narration, a Q&A pairing, or whatever else fits the goal. Discuss the target shape with the agent before or during processing — that is the part you have leverage over.
 
-Each topic file follows the same shape: **What it is → What you do → What you see → Things to watch out for → Source**. Screenshots are inline with explanatory captions, numbered continuously across all topics.
+For the prompt above the agent landed on a `summary.md` index (who is who, the big picture, a table of topics), per-topic files in a *What it is → What you do → What you see → Things to watch out for → Source* rhythm, and screenshots numbered continuously across all topics.
 
 ## What a topic document looks like
 
-The block below is a synthetic excerpt with placeholder screenshots. In real outputs the screenshots are frames extracted from the recording at the right timestamps.
+The block below is a synthetic excerpt with placeholder screenshots. In real outputs the screenshots are frames extracted from the recording at the right timestamps. The layout below reflects one prompt's intent — yours can ask for something completely different.
 
 ---
 
