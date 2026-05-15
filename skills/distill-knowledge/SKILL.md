@@ -18,7 +18,7 @@ metadata:
 
 Emit `outbox/{meeting-slug}/transcript.md`; screenshots inline when useful; structured docs only on request. `{meeting-slug}` = `kebab-case-topic-YYYYMMDD`. Never touch `inbox/` or `knowledge/`.
 
-References (load on demand): [setup](references/setup.md) · [output templates](references/output-templates.md) · [ffmpeg](references/ffmpeg.md) · [transcribe CLI](references/transcribe-cli.md) · [prep audio CLI](references/prep-audio-cli.md) · [chunked transcription](references/chunked-transcription.md) · [structured docs](references/structured-docs.md) · spot-check: [`scripts/extract_clip.py`](scripts/extract_clip.py).
+References (load on demand): [setup](references/setup.md) · [output templates](references/output-templates.md) · [ffmpeg](references/ffmpeg.md) · [transcribe CLI](references/transcribe-cli.md) · [prep audio CLI](references/prep-audio-cli.md) · [chunked transcription](references/chunked-transcription.md) · [structured docs](references/structured-docs.md) · [cleanup CLI](scripts/cleanup.py) · spot-check: [`scripts/extract_clip.py`](scripts/extract_clip.py).
 
 Scripts run via `uv run --script` (PEP 723). All support `--help`. On first run verify [setup prerequisites](references/setup.md).
 
@@ -85,9 +85,19 @@ Technical / multilingual / mumbled audio → VTT-aligned path strongly preferred
 
 ### Steps 7–10 — Structured docs (conditional)
 
-**Gate 2** — ask: structured docs or transcript only? If transcript only → report + stop.
+**Gate 2** — ask: structured docs or transcript only? If transcript only → cleanup + report + stop.
 
-Otherwise → [structured docs reference](references/structured-docs.md): plan topics, emit `summary.md` + `topics/{slug}.md`, report, stop.
+Otherwise → [structured docs reference](references/structured-docs.md): plan topics, emit `summary.md` + `topics/{slug}.md`, cleanup, report, stop.
+
+### Step 11 — Cleanup (mandatory, after user accepts)
+
+Once the user confirms the results are acceptable, remove temporary prep artifacts via [`cleanup.py`](scripts/cleanup.py):
+
+```bash
+uv run --script scripts/cleanup.py --slug {meeting-slug}
+```
+
+The script verifies `outbox/{meeting-slug}/transcript.md` exists before deleting `tmp/prep/{meeting-slug}/`. Use `--dry-run` to preview. **Never use `rm` directly — all temp removal goes through this script.**
 
 ## Fidelity rule
 
@@ -107,3 +117,4 @@ When two transcripts agree on meaning → faithful. When they disagree and neith
 - **Don't load rich `--prompt`** on non-diarize model. Prompts leak as fabrications. Vocab list + 1-line topic max. See [prompt-hallucination warning](references/transcribe-cli.md#prompt-hallucination-warning).
 - **Don't auto-pick VTT decisions.** Always surface assessment; user confirms at Gate 1.
 - **Don't write outside `outbox/{meeting-slug}/`.** Temp files → `tmp/`; finals → `outbox/`.
+- **Don't run `rm` on temp files.** Always use [`cleanup.py`](scripts/cleanup.py) — it validates output exists and only operates under `tmp/`.
