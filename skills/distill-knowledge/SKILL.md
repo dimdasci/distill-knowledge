@@ -11,7 +11,7 @@ compatibility: Requires uv, ffmpeg, ffprobe, Python ≥3.10, and OPENAI_API_KEY 
 license: MIT
 metadata:
   author: Dim Kharitonov <dimds@fastmail.com> (https://github.com/dimdasci)
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Convert Recording → Knowledge Markdown
