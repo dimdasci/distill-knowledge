@@ -111,10 +111,7 @@ def _normalize_response_format(value: str | None) -> str:
         return DEFAULT_RESPONSE_FORMAT
     fmt = value.strip().lower()
     if fmt not in ALLOWED_RESPONSE_FORMATS:
-        _die(
-            "response-format must be one of: "
-            + ", ".join(sorted(ALLOWED_RESPONSE_FORMATS))
-        )
+        _die("response-format must be one of: " + ", ".join(sorted(ALLOWED_RESPONSE_FORMATS)))
     return fmt
 
 
@@ -268,14 +265,16 @@ def _preflight(client: Any, model: str, cache_dir: Path | None) -> None:
         client.models.retrieve(model)
     except AuthenticationError as exc:
         _die_api(
-            "auth", 10,
+            "auth",
+            10,
             "OpenAI rejected the API key (HTTP 401). The key may be revoked, "
             "expired, or malformed. Replace OPENAI_API_KEY and retry.\n"
             f"  Details: {exc}",
         )
     except PermissionDeniedError as exc:
         _die_api(
-            "permission", 11,
+            "permission",
+            11,
             f"API key does not have access to model {model!r} (HTTP 403). "
             "Grant model access on the project at "
             "https://platform.openai.com/settings, or choose a model the key can use.\n"
@@ -283,7 +282,8 @@ def _preflight(client: Any, model: str, cache_dir: Path | None) -> None:
         )
     except NotFoundError as exc:
         _die_api(
-            "permission", 11,
+            "permission",
+            11,
             f"Model {model!r} was not found (HTTP 404). "
             "Check the model name; it may be misspelled or "
             "unavailable on this account.\n"
@@ -291,7 +291,8 @@ def _preflight(client: Any, model: str, cache_dir: Path | None) -> None:
         )
     except APIConnectionError as exc:
         _die_api(
-            "service", 20,
+            "service",
+            20,
             "Could not reach OpenAI during pre-flight check. "
             "Check connectivity and retry.\n"
             f"  Details: {exc}",
@@ -345,6 +346,7 @@ def _run_one(
         PermissionDeniedError,
         RateLimitError,
     )
+
     model = payload.get("model")
     req_id = request_id or str(uuid.uuid4())
     effective_wall = max_wall if max_wall is not None else DEFAULT_MAX_WALL
@@ -379,7 +381,8 @@ def _run_one(
             except FuturesTimeoutError:
                 elapsed = time.monotonic() - t0
                 _die_api(
-                    "timeout", 21,
+                    "timeout",
+                    21,
                     f"Wall-clock limit exceeded: {effective_wall:.0f}s "
                     f"(elapsed {elapsed:.1f}s). request_id={req_id}. "
                     "The API accepted the request but never completed. "
@@ -389,14 +392,16 @@ def _run_one(
                 )
     except AuthenticationError as exc:
         _die_api(
-            "auth", 10,
+            "auth",
+            10,
             "OpenAI rejected the API key (HTTP 401). The key may be revoked, "
             "expired, or malformed. Replace OPENAI_API_KEY and retry.\n"
             f"  Details: {exc}",
         )
     except PermissionDeniedError as exc:
         _die_api(
-            "permission", 11,
+            "permission",
+            11,
             f"API key does not have access to model {model!r} (HTTP 403). "
             "Grant model access on the project at "
             "https://platform.openai.com/settings, or choose a model the key can use.\n"
@@ -404,7 +409,8 @@ def _run_one(
         )
     except NotFoundError as exc:
         _die_api(
-            "permission", 11,
+            "permission",
+            11,
             f"Model {model!r} was not found (HTTP 404). "
             "Check the model name; it may be misspelled or "
             "unavailable on this account.\n"
@@ -412,7 +418,8 @@ def _run_one(
         )
     except RateLimitError as exc:
         _die_api(
-            "rate-limit", 12,
+            "rate-limit",
+            12,
             "Rate limit or quota exceeded (HTTP 429). "
             "Inspect usage at https://platform.openai.com/usage. "
             "Wait and retry, or switch to a different model/tier.\n"
@@ -420,7 +427,8 @@ def _run_one(
         )
     except BadRequestError as exc:
         _die_api(
-            "bad-request", 30,
+            "bad-request",
+            30,
             f"Request rejected (HTTP 400) for {audio_path}. Likely an unsupported "
             "audio format, malformed file, or invalid parameter combination.\n"
             f"  Details: {exc}",
@@ -429,7 +437,8 @@ def _run_one(
         elapsed = time.monotonic() - t0
         effective_timeout = read_timeout if read_timeout is not None else 450.0
         _die_api(
-            "timeout", 21,
+            "timeout",
+            21,
             f"Request accepted but no response within {effective_timeout:.0f}s "
             f"(elapsed {elapsed:.1f}s). request_id={req_id}. "
             "Retry with --timeout <larger> or cancel.\n"
@@ -437,21 +446,24 @@ def _run_one(
         )
     except APIConnectionError as exc:
         _die_api(
-            "service", 20,
+            "service",
+            20,
             "Could not reach OpenAI (network error). The SDK already retried; "
             "this is usually transient. Check connectivity and retry.\n"
             f"  Details: {exc}",
         )
     except InternalServerError as exc:
         _die_api(
-            "service", 20,
+            "service",
+            20,
             "OpenAI service error (HTTP 5xx). The SDK already retried. "
             "Check https://status.openai.com and retry.\n"
             f"  Details: {exc}",
         )
     except Exception as exc:
         _die_api(
-            "unknown", 1,
+            "unknown",
+            1,
             f"Unexpected API error for {audio_path}: {type(exc).__name__}: {exc}",
         )
 
@@ -463,9 +475,7 @@ def _run_one(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description=(
-            "Transcribe audio (optionally with speaker diarization) using OpenAI."
-        )
+        description=("Transcribe audio (optionally with speaker diarization) using OpenAI.")
     )
     parser.add_argument("audio", nargs="+", help="Audio file(s) to transcribe")
     parser.add_argument(
@@ -514,7 +524,7 @@ def main() -> None:
         type=float,
         default=None,
         help="Hard wall-clock limit per API call in seconds (default: 600). "
-             "Kills the request if the server streams bytes without completing.",
+        "Kills the request if the server streams bytes without completing.",
     )
     parser.add_argument(
         "--skip-preflight",
@@ -546,10 +556,7 @@ def main() -> None:
 
     if args.prompt and "transcribe-diarize" in args.model:
         _die("prompt is not supported with gpt-4o-transcribe-diarize")
-    if (
-        args.response_format == "diarized_json"
-        and "transcribe-diarize" not in args.model
-    ):
+    if args.response_format == "diarized_json" and "transcribe-diarize" not in args.model:
         _die("diarized_json requires gpt-4o-transcribe-diarize")
     if args.manifest and args.chunk_index is None:
         _die("--chunk-index is required when using --manifest")
@@ -565,10 +572,7 @@ def main() -> None:
 
     known_names, known_refs = _parse_known_speakers(args.known_speaker)
     if known_names and "transcribe-diarize" not in args.model:
-        _warn(
-            "known-speaker references are only supported for "
-            "gpt-4o-transcribe-diarize"
-        )
+        _warn("known-speaker references are only supported for gpt-4o-transcribe-diarize")
     payload = _build_payload(args, known_names, known_refs)
 
     if args.dry_run:
@@ -596,12 +600,16 @@ def main() -> None:
         # Update manifest: in-progress
         if manifest_path and args.chunk_index is not None:
             _update_manifest(
-                manifest_path, args.chunk_index,
-                status="in_progress", request_id=req_id,
+                manifest_path,
+                args.chunk_index,
+                status="in_progress",
+                request_id=req_id,
             )
 
         result, req_id, elapsed = _run_one(
-            client, path, payload,
+            client,
+            path,
+            payload,
             read_timeout=args.timeout,
             max_wall=args.max_wall,
             request_id=req_id,
@@ -622,9 +630,7 @@ def main() -> None:
         if args.stdout:
             print(output)
             continue
-        out_path = _build_output_path(
-            path, args.response_format, args.out, args.out_dir
-        )
+        out_path = _build_output_path(path, args.response_format, args.out, args.out_dir)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(output, encoding="utf-8")
         print(f"Wrote {out_path}")
@@ -639,7 +645,8 @@ def main() -> None:
             except ValueError:
                 transcript_file_value = str(out_path.resolve())
             _update_manifest(
-                manifest_path, args.chunk_index,
+                manifest_path,
+                args.chunk_index,
                 status="done",
                 transcript_file=transcript_file_value,
             )

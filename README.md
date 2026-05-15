@@ -177,6 +177,16 @@ The published GitHub repo is named `distill-knowledge` to match the skill (skill
 
 The skill picks the path at Gate 1 of the workflow and asks you to confirm before spending API budget.
 
+## Development checks
+
+```bash
+make quality          # format check + lint + syntax + tests
+make format           # apply formatter
+make install-hooks    # enable commit-time checks
+```
+
+CI runs the same quality checks in `.github/workflows/python-quality.yml`.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

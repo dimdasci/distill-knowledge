@@ -17,28 +17,40 @@ import sys
 from pathlib import Path
 from typing import NoReturn
 
-TIMESTAMP_RE = re.compile(
-    r"(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})"
-)
+TIMESTAMP_RE = re.compile(r"(\d{2}:\d{2}:\d{2}\.\d{3})\s+-->\s+(\d{2}:\d{2}:\d{2}\.\d{3})")
 SPEAKER_RE = re.compile(r"^(.+?):\s+(.+)$")
 
 
 class VTTParseError(Exception):
     """Raised when a VTT file cannot be read or parsed."""
+
     pass
 
 
 SCREEN_PATTERNS = {
-    "explicit": ["see my screen", "screen share", "showing you", "let me show",
-                  "look at this", "you see this", "can you see"],
-    "deictic": ["this table", "this page", "this column", "this field",
-                "this button", "right here", "over here", "this one"],
-    "navigation": ["scroll down", "click here", "go to", "open this",
-                    "switch to", "zoom in"],
+    "explicit": [
+        "see my screen",
+        "screen share",
+        "showing you",
+        "let me show",
+        "look at this",
+        "you see this",
+        "can you see",
+    ],
+    "deictic": [
+        "this table",
+        "this page",
+        "this column",
+        "this field",
+        "this button",
+        "right here",
+        "over here",
+        "this one",
+    ],
+    "navigation": ["scroll down", "click here", "go to", "open this", "switch to", "zoom in"],
 }
 SCREEN_COMPILED = {
-    cat: [re.compile(p, re.IGNORECASE) for p in pats]
-    for cat, pats in SCREEN_PATTERNS.items()
+    cat: [re.compile(p, re.IGNORECASE) for p in pats] for cat, pats in SCREEN_PATTERNS.items()
 }
 
 
@@ -140,11 +152,7 @@ def parse_vtt(filepath: str | Path) -> dict:
                 break
             if TIMESTAMP_RE.match(tl):
                 break
-            if (
-                tl.isdigit()
-                and i + 1 < len(lines)
-                and TIMESTAMP_RE.match(lines[i + 1].strip())
-            ):
+            if tl.isdigit() and i + 1 < len(lines) and TIMESTAMP_RE.match(lines[i + 1].strip()):
                 break
             text_lines.append(tl)
             i += 1
@@ -161,18 +169,29 @@ def parse_vtt(filepath: str | Path) -> dict:
         cue_index += 1
         ref_type = detect_screen_ref(cleaned)
 
-        cues.append({
-            "index": cue_index, "start": start_ts, "end": end_ts,
-            "start_seconds": round(start_sec, 3), "end_seconds": round(end_sec, 3),
-            "speaker": speaker, "text": cleaned,
-            "screen_reference": ref_type is not None,
-        })
+        cues.append(
+            {
+                "index": cue_index,
+                "start": start_ts,
+                "end": end_ts,
+                "start_seconds": round(start_sec, 3),
+                "end_seconds": round(end_sec, 3),
+                "speaker": speaker,
+                "text": cleaned,
+                "screen_reference": ref_type is not None,
+            }
+        )
 
         if ref_type:
-            screen_refs.append({
-                "cue_index": cue_index, "timestamp": start_ts,
-                "seconds": round(start_sec, 3), "context": cleaned, "type": ref_type,
-            })
+            screen_refs.append(
+                {
+                    "cue_index": cue_index,
+                    "timestamp": start_ts,
+                    "seconds": round(start_sec, 3),
+                    "context": cleaned,
+                    "type": ref_type,
+                }
+            )
 
     sorted_speakers = sorted(speakers)
     return {
@@ -189,12 +208,15 @@ def parse_vtt(filepath: str | Path) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Parse WebVTT transcript files into structured JSON.")
+        description="Parse WebVTT transcript files into structured JSON."
+    )
     parser.add_argument("vtt_file", help="Path to the VTT file to parse")
-    parser.add_argument("--pretty", action="store_true",
-                        help="Pretty-print JSON output with indentation")
-    parser.add_argument("--output", "-o", default=None,
-                        help="Write JSON to this file instead of stdout")
+    parser.add_argument(
+        "--pretty", action="store_true", help="Pretty-print JSON output with indentation"
+    )
+    parser.add_argument(
+        "--output", "-o", default=None, help="Write JSON to this file instead of stdout"
+    )
     args = parser.parse_args()
 
     vtt_path = _check_input(args.vtt_file)
