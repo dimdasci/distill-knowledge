@@ -1,0 +1,16 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.13
+    hooks:
+      - id: ruff-format
+        files: ^skills/distill-knowledge/scripts/.*\.py$
+      - id: ruff-check
+        files: ^skills/distill-knowledge/scripts/.*\.py$
+
+  - repo: local
+    hooks:
+      - id: python-compileall
+        name: python compileall (syntax check)
+        entry: python3 -m compileall -q skills/distill-knowledge/scripts
+        language: system
+        pass_filenames: false

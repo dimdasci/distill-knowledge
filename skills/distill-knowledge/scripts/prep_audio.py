@@ -31,9 +31,13 @@ def _die(message: str, code: int = 1) -> NoReturn:
 def _probe_duration(path: Path) -> float:
     """Get duration in seconds via ffprobe."""
     cmd = [
-        "ffprobe", "-v", "quiet",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
+        "ffprobe",
+        "-v",
+        "quiet",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
         str(path),
     ]
     try:
@@ -55,15 +59,23 @@ def _reencode_stripped(
     duration = source_duration - leading_s - trailing_s
 
     cmd = [
-        "ffmpeg", "-y",
-        "-ss", f"{start:.3f}",
-        "-i", str(input_path),
-        "-t", f"{duration:.3f}",
+        "ffmpeg",
+        "-y",
+        "-ss",
+        f"{start:.3f}",
+        "-i",
+        str(input_path),
+        "-t",
+        f"{duration:.3f}",
         "-vn",
-        "-ac", "1",
-        "-ar", "16000",
-        "-c:a", "libopus",
-        "-b:a", "32k",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "32k",
         str(output_path),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -79,11 +91,16 @@ def _cut_chunk(
 ) -> None:
     """Cut a chunk from stripped.ogg using stream copy (no re-encode)."""
     cmd = [
-        "ffmpeg", "-y",
-        "-ss", f"{start_s:.3f}",
-        "-i", str(source),
-        "-t", f"{duration_s:.3f}",
-        "-c", "copy",
+        "ffmpeg",
+        "-y",
+        "-ss",
+        f"{start_s:.3f}",
+        "-i",
+        str(source),
+        "-t",
+        f"{duration_s:.3f}",
+        "-c",
+        "copy",
         str(output),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -109,21 +126,24 @@ def _find_nearest_silence(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Preprocess audio/video for transcription."
-    )
+    parser = argparse.ArgumentParser(description="Preprocess audio/video for transcription.")
     parser.add_argument("input", help="Input audio or video file")
     parser.add_argument("--out-dir", required=True, help="Output directory")
     parser.add_argument(
-        "--max-chunk", type=float, default=480.0,
-        help="Max chunk duration in seconds (default: 480 = 8 min),
+        "--max-chunk",
+        type=float,
+        default=480.0,
+        help="Max chunk duration in seconds (default: 480 = 8 min)",
     )
     parser.add_argument(
-        "--overlap", type=float, default=30.0,
+        "--overlap",
+        type=float,
+        default=30.0,
         help="Overlap between chunks in seconds (default: 30)",
     )
     parser.add_argument(
-        "--no-split", action="store_true",
+        "--no-split",
+        action="store_true",
         help="Force single output even if >8 min",
     )
 
@@ -211,18 +231,20 @@ def main() -> None:
     if not needs_split:
         # Single chunk = the whole file
         manifest["n_chunks"] = 1
-        manifest["chunks"] = [{
-            "index": 0,
-            "file": "stripped.ogg",
-            "core_start_s": 0.0,
-            "core_end_s": round(stripped_duration, 1),
-            "chunk_start_s": 0.0,
-            "chunk_end_s": round(stripped_duration, 1),
-            "split_silence": None,
-            "status": "pending",
-            "transcript_file": None,
-            "request_id": None,
-        }]
+        manifest["chunks"] = [
+            {
+                "index": 0,
+                "file": "stripped.ogg",
+                "core_start_s": 0.0,
+                "core_end_s": round(stripped_duration, 1),
+                "chunk_start_s": 0.0,
+                "chunk_end_s": round(stripped_duration, 1),
+                "split_silence": None,
+                "status": "pending",
+                "transcript_file": None,
+                "request_id": None,
+            }
+        ]
     else:
         # Split into balanced chunks
         n = math.ceil(stripped_duration / args.max_chunk)
@@ -273,22 +295,27 @@ def main() -> None:
 
             _cut_chunk(stripped_path, chunk_path, chunk_start, chunk_duration)
 
-            chunks.append({
-                "index": idx,
-                "file": chunk_file,
-                "core_start_s": round(core_start, 1),
-                "core_end_s": round(core_end, 1),
-                "chunk_start_s": round(chunk_start, 1),
-                "chunk_end_s": round(chunk_end, 1),
-                "split_silence": (
-                    {"start": round(split_silence["start"], 1),
-                     "end": round(split_silence["end"], 1)}
-                    if split_silence else None
-                ),
-                "status": "pending",
-                "transcript_file": None,
-                "request_id": None,
-            })
+            chunks.append(
+                {
+                    "index": idx,
+                    "file": chunk_file,
+                    "core_start_s": round(core_start, 1),
+                    "core_end_s": round(core_end, 1),
+                    "chunk_start_s": round(chunk_start, 1),
+                    "chunk_end_s": round(chunk_end, 1),
+                    "split_silence": (
+                        {
+                            "start": round(split_silence["start"], 1),
+                            "end": round(split_silence["end"], 1),
+                        }
+                        if split_silence
+                        else None
+                    ),
+                    "status": "pending",
+                    "transcript_file": None,
+                    "request_id": None,
+                }
+            )
             prev_core_end = core_end
 
         manifest["n_chunks"] = n

@@ -29,7 +29,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -187,9 +186,7 @@ def _reconstruct_overlaps(
         ):
             cluster: list[dict[str, Any]] = [segments[i], segments[i + 1]]
             cluster_start = segments[i].get("start", 0)
-            cluster_max_end = max(
-                segments[i].get("end", 0), segments[i + 1].get("end", 0)
-            )
+            cluster_max_end = max(segments[i].get("end", 0), segments[i + 1].get("end", 0))
             j = i + 2
             while j < n:
                 prev = cluster[-1]
@@ -253,10 +250,7 @@ def _smooth_crosstalk(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
             # Absorb the interjection into the surrounding speaker's turn
             merged = dict(segments[i])
             merged["end"] = segments[i + 2]["end"]
-            merged["text"] = (
-                segments[i].get("text", "")
-                + segments[i + 2].get("text", "")
-            )
+            merged["text"] = segments[i].get("text", "") + segments[i + 2].get("text", "")
             result.append(merged)
             i += 3
         else:

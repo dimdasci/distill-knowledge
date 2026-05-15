@@ -1,0 +1,35 @@
+name: python-quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Check formatting (ruff)
+        run: uvx ruff format --check skills/distill-knowledge/scripts
+
+      - name: Lint (ruff)
+        run: uvx ruff check skills/distill-knowledge/scripts
+
+      - name: Syntax check (compileall)
+        run: python -m compileall -q skills/distill-knowledge/scripts
+
+      - name: Run tests
+        run: uvx pytest

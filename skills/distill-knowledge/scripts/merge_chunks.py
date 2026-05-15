@@ -110,13 +110,15 @@ def _annotate_segments(
         elif abs_end > core_end and chunk_end > core_end:
             in_overlap = "next"
 
-        annotated.append({
-            **seg,
-            "start": abs_start,
-            "end": abs_end,
-            "source_chunk": chunk_index,
-            "in_overlap": in_overlap,
-        })
+        annotated.append(
+            {
+                **seg,
+                "start": abs_start,
+                "end": abs_end,
+                "source_chunk": chunk_index,
+                "in_overlap": in_overlap,
+            }
+        )
     return annotated
 
 
@@ -131,7 +133,6 @@ def _build_overlap_windows(
 
     for i in range(len(chunks) - 1):
         left_chunk = chunks[i]
-        right_chunk = chunks[i + 1]
 
         # Shared region: from core_end - overlap to core_end + overlap
         # More precisely: the region where both chunks have data
@@ -141,22 +142,26 @@ def _build_overlap_windows(
 
         # Left segments in shared region (timestamps are now absolute)
         left_segs = [
-            seg for seg in all_annotated[i]
+            seg
+            for seg in all_annotated[i]
             if seg["end"] > shared_start and seg["start"] < shared_end
         ]
 
         # Right segments in shared region
         right_segs = [
-            seg for seg in all_annotated[i + 1]
+            seg
+            for seg in all_annotated[i + 1]
             if seg["end"] > shared_start and seg["start"] < shared_end
         ]
 
-        windows.append({
-            "boundary_idx": i,
-            "shared_region": [round(shared_start, 1), round(shared_end, 1)],
-            "left": left_segs,
-            "right": right_segs,
-        })
+        windows.append(
+            {
+                "boundary_idx": i,
+                "shared_region": [round(shared_start, 1), round(shared_end, 1)],
+                "left": left_segs,
+                "right": right_segs,
+            }
+        )
 
     return windows
 
@@ -169,14 +174,16 @@ def _build_chunk_boundaries(manifest: dict) -> list[dict]:
 
     for i in range(len(chunks) - 1):
         core_end = chunks[i]["core_end_s"]
-        boundaries.append({
-            "index": i,
-            "core_end_s": core_end,
-            "shared_region": [
-                round(core_end - overlap_s, 1),
-                round(core_end + overlap_s, 1),
-            ],
-        })
+        boundaries.append(
+            {
+                "index": i,
+                "core_end_s": core_end,
+                "shared_region": [
+                    round(core_end - overlap_s, 1),
+                    round(core_end + overlap_s, 1),
+                ],
+            }
+        )
 
     return boundaries
 
@@ -199,19 +206,23 @@ def main() -> None:
         description="Merge per-chunk transcription JSONs into unified timeline."
     )
     parser.add_argument(
-        "--manifest", required=True,
+        "--manifest",
+        required=True,
         help="Path to manifest.json from prep_audio.py",
     )
     parser.add_argument(
-        "--intake", required=True,
+        "--intake",
+        required=True,
         help="JSON string with intake context (speaker_count, speaker_names, topic, terms)",
     )
     parser.add_argument(
-        "--vtt", default=None,
+        "--vtt",
+        default=None,
         help="Path to VTT file for cross-check cues (optional)",
     )
     parser.add_argument(
-        "--out", required=True,
+        "--out",
+        required=True,
         help="Output path for merged.json",
     )
 

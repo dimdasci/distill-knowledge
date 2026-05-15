@@ -24,11 +24,11 @@ Defaults:
   --duration 6
   --out tmp/clips/clip_<seconds>.ogg
 """
+
 from __future__ import annotations
 
 import argparse
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -50,15 +50,22 @@ def parse_timestamp(value: str) -> float:
 
 
 def main() -> int:
-    p = argparse.ArgumentParser(description=__doc__,
-                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("audio", type=Path, help="Source audio or video file")
-    p.add_argument("--at", type=parse_timestamp, required=True,
-                   help="Start timestamp (seconds, MM:SS, or H:MM:SS)")
-    p.add_argument("--duration", type=float, default=6.0,
-                   help="Clip duration in seconds (default 6)")
-    p.add_argument("--out", type=Path, default=None,
-                   help="Output path (default tmp/clips/clip_<seconds>.ogg)")
+    p.add_argument(
+        "--at",
+        type=parse_timestamp,
+        required=True,
+        help="Start timestamp (seconds, MM:SS, or H:MM:SS)",
+    )
+    p.add_argument(
+        "--duration", type=float, default=6.0, help="Clip duration in seconds (default 6)"
+    )
+    p.add_argument(
+        "--out", type=Path, default=None, help="Output path (default tmp/clips/clip_<seconds>.ogg)"
+    )
     args = p.parse_args()
 
     if not shutil.which("ffmpeg"):
@@ -75,12 +82,26 @@ def main() -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
 
     cmd = [
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-ss", f"{args.at}",
-        "-t", f"{args.duration}",
-        "-i", str(args.audio),
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        f"{args.at}",
+        "-t",
+        f"{args.duration}",
+        "-i",
+        str(args.audio),
         "-vn",
-        "-c:a", "libopus", "-b:a", "32k", "-ac", "1", "-ar", "16000",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "32k",
+        "-ac",
+        "1",
+        "-ar",
+        "16000",
         str(out),
     ]
     res = subprocess.run(cmd, capture_output=True, text=True)
