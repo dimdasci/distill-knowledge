@@ -14,8 +14,11 @@ Built for architects and engineering teams who want agents to apply domain metho
 ## Install
 
 ```bash
-# Install a single skill
-npx skills add dimdasci/distill-knowledge
+# Install all skills from this repo
+npx skills add dimdasci/distill-knowledge --skill '*'
+
+# Install a specific skill
+npx skills add dimdasci/distill-knowledge --skill distill-knowledge
 npx skills add dimdasci/distill-knowledge --skill c4-diagram
 ```
 
