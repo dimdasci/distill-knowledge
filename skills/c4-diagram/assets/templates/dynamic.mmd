@@ -1,0 +1,26 @@
+%% C4 Dynamic diagram — sequence style
+%% Use: showing runtime behavior for a specific scenario/use case
+%% Audience: technical and non-technical
+%% Scope: a feature, story, or use case
+%% When: sparingly — for interesting or complex interactions
+
+---
+title: Internet Banking System — Sign In (Dynamic)
+---
+sequenceDiagram
+  actor Customer as Personal Banking Customer<br/>[Person]
+  participant SPA as Single-Page Application<br/>[Container: JS/Angular]
+  participant API as API Application<br/>[Container: Java/Spring]
+  participant Security as Security Component<br/>[Component: Spring Bean]
+  participant DB as Database<br/>[Container: Oracle 12c]
+
+  Customer->>SPA: Enters credentials and clicks "Sign In"
+  SPA->>+API: POST /api/auth/signin [JSON/HTTPS]
+  API->>+Security: validateCredentials(username, password)
+  Security->>+DB: SELECT * FROM users WHERE username = ? [JDBC]
+  DB-->>-Security: user record
+  Security->>Security: verify password hash
+  Security-->>-API: AuthResult{authenticated, token}
+  API-->>-SPA: 200 OK {token, expires}
+  SPA->>SPA: Store token, redirect to dashboard
+  SPA-->>Customer: Shows account dashboard

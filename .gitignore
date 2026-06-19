@@ -12,3 +12,4 @@ skills/convert/scripts/tests/explore_*.py
 tmp/
 skills/convert/scripts/__pycache__/
 __pycache__/
+skills/c4-diagram/scripts/node_modules/

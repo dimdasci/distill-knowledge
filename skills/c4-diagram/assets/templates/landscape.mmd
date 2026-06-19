@@ -1,0 +1,47 @@
+%% C4 System Landscape diagram
+%% Use: enterprise overview — all systems and people in a scope
+%% Audience: everyone (technical and non-technical)
+%% Scope: entire enterprise, organisation, or department
+%% When: recommended for larger organisations — no single focal system
+
+---
+title: Big Bank plc — System Landscape
+---
+flowchart TB
+  Customer(["<b>Personal Banking Customer</b><br/><i>[Person]</i><br/>A customer of the bank"])
+  BackOffice(["<b>Back Office Staff</b><br/><i>[Person]</i><br/>Administration and support"])
+
+  subgraph BigBank ["Big Bank plc — [Enterprise]"]
+    direction TB
+    IBS["<b>Internet Banking System</b><br/><i>[Software System]</i><br/>Allows customers to view<br/>balances and make payments"]
+    ATM["<b>ATM System</b><br/><i>[Software System]</i><br/>Allows customers to<br/>withdraw cash"]
+    Mainframe["<b>Mainframe Banking System</b><br/><i>[Software System]</i><br/>Stores core banking data"]
+    CRM["<b>CRM System</b><br/><i>[Software System]</i><br/>Manages customer<br/>relationships"]
+    Compliance["<b>Compliance System</b><br/><i>[Software System]</i><br/>Regulatory reporting<br/>and audit"]
+  end
+
+  Email["<b>E-mail System</b><br/><i>[Software System, External]</i><br/>Sends e-mails"]:::external
+  CreditBureau["<b>Credit Bureau</b><br/><i>[Software System, External]</i><br/>Credit scoring"]:::external
+
+  Customer -- "manages accounts using" --> IBS
+  Customer -- "withdraws cash using" --> ATM
+  BackOffice -- "manages customers using" --> CRM
+  BackOffice -- "reviews reports in" --> Compliance
+  IBS -- "gets account data from" --> Mainframe
+  ATM -- "uses" --> Mainframe
+  CRM -- "gets customer data from" --> Mainframe
+  Compliance -- "reads transactions from" --> Mainframe
+  IBS -- "sends notifications using" --> Email
+  CRM -- "checks credit via" --> CreditBureau
+
+  subgraph Legend["Legend"]
+    direction LR
+    LP(["Person"]):::person
+    LS["Internal System"]:::system
+    LE["External System"]:::external
+    LP ~~~ LS ~~~ LE
+  end
+
+  classDef person fill:#08427b,color:#fff,stroke:#052e56
+  classDef system fill:#1168bd,color:#fff,stroke:#0b4884
+  classDef external fill:#999999,color:#fff,stroke:#6b6b6b

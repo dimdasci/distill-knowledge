@@ -1,0 +1,34 @@
+%% C4 System Context diagram
+%% Use: the "big picture" — system in its environment, users, external dependencies
+%% Audience: everyone (technical and non-technical)
+%% Scope: one software system
+%% When: always — every system should have one
+
+---
+title: Internet Banking System — System Context
+---
+flowchart TB
+  Customer(["<b>Personal Banking Customer</b><br/><i>[Person]</i><br/>A customer of the bank<br/>who wants to manage accounts"])
+
+  IBS["<b>Internet Banking System</b><br/><i>[Software System]</i><br/>Allows customers to view<br/>balances and make payments"]
+
+  Email["<b>E-mail System</b><br/><i>[Software System, External]</i><br/>Sends e-mails<br/>to customers"]:::external
+
+  Mainframe["<b>Mainframe Banking System</b><br/><i>[Software System, External]</i><br/>Stores core banking<br/>information and transactions"]:::external
+
+  Customer -- "views account balances<br/>and makes payments using" --> IBS
+  IBS -- "sends e-mails using" --> Email
+  IBS -- "gets account information<br/>and makes payments using" --> Mainframe
+  Email -- "sends e-mails to" --> Customer
+
+  subgraph Legend["Legend"]
+    direction LR
+    LP(["Person"]):::person
+    LS["Internal System"]:::system
+    LE["External System"]:::external
+    LP ~~~ LS ~~~ LE
+  end
+
+  classDef person fill:#08427b,color:#fff,stroke:#052e56
+  classDef system fill:#1168bd,color:#fff,stroke:#0b4884
+  classDef external fill:#999999,color:#fff,stroke:#6b6b6b

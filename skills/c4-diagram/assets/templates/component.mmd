@@ -1,0 +1,52 @@
+%% C4 Component diagram
+%% Use: internal structure of a single container
+%% Audience: architects and developers
+%% Scope: one container
+%% When: only if it adds value — consider automating for long-lived docs
+
+---
+title: Internet Banking System — API Application — Component Diagram
+---
+flowchart TB
+  SPA["<b>Single-Page Application</b><br/><i>[Container: JavaScript / Angular]</i><br/>Provides banking functionality"]:::container
+  MobileApp["<b>Mobile App</b><br/><i>[Container: Xamarin]</i><br/>Provides mobile banking"]:::container
+
+  subgraph API ["API Application — [Container: Java / Spring MVC]"]
+    direction TB
+    SignIn["<b>Sign In Controller</b><br/><i>[Component: Spring MVC Controller]</i><br/>Allows users to sign in"]
+    Accounts["<b>Accounts Controller</b><br/><i>[Component: Spring MVC Controller]</i><br/>Provides account information"]
+    ResetPwd["<b>Reset Password Controller</b><br/><i>[Component: Spring MVC Controller]</i><br/>Allows users to reset passwords"]
+    Security["<b>Security Component</b><br/><i>[Component: Spring Bean]</i><br/>Handles authentication,<br/>password changes, etc."]
+    EmailComp["<b>E-mail Component</b><br/><i>[Component: Spring Bean]</i><br/>Sends e-mails to users"]
+    MainframeComp["<b>Mainframe Facade</b><br/><i>[Component: Spring Bean]</i><br/>Facade to the mainframe<br/>banking system"]
+  end
+
+  DB[("<b>Database</b><br/><i>[Container: Oracle 12c]</i><br/>Stores credentials and logs")]:::container
+  Email["<b>E-mail System</b><br/><i>[Software System, External]</i><br/>Sends e-mails"]:::external
+  Mainframe["<b>Mainframe Banking System</b><br/><i>[Software System, External]</i><br/>Core banking data"]:::external
+
+  SPA -- "makes API calls to" --> SignIn
+  SPA -- "makes API calls to" --> Accounts
+  SPA -- "makes API calls to" --> ResetPwd
+  MobileApp -- "makes API calls to" --> SignIn
+  MobileApp -- "makes API calls to" --> Accounts
+  MobileApp -- "makes API calls to" --> ResetPwd
+  SignIn -- "uses" --> Security
+  Accounts -- "uses" --> MainframeComp
+  ResetPwd -- "uses" --> Security
+  ResetPwd -- "uses" --> EmailComp
+  Security -- "reads credentials from<br/>[JDBC]" --> DB
+  EmailComp -- "sends e-mails using<br/>[SMTP]" --> Email
+  MainframeComp -- "makes API calls to<br/>[XML/HTTPS]" --> Mainframe
+
+  subgraph Legend["Legend"]
+    direction LR
+    LComp["Component"]:::component
+    LCont["Container"]:::container
+    LE["External System"]:::external
+    LComp ~~~ LCont ~~~ LE
+  end
+
+  classDef component fill:#85bbf0,color:#000,stroke:#5d99c6
+  classDef container fill:#438dd5,color:#fff,stroke:#2e6295
+  classDef external fill:#999999,color:#fff,stroke:#6b6b6b
