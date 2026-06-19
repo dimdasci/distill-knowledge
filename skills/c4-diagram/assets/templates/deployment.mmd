@@ -1,0 +1,52 @@
+%% C4 Deployment diagram
+%% Use: mapping containers to infrastructure
+%% Audience: technical (architects, devs, ops, infra)
+%% Scope: one or more systems in one environment (dev, staging, prod)
+%% When: recommended — shows where containers actually run
+
+---
+title: Internet Banking System — Deployment (Live Environment)
+---
+flowchart TB
+  subgraph Live ["Live Environment"]
+    direction TB
+
+    subgraph CustomerDevices ["Customer's Devices — [Deployment Node]"]
+      direction TB
+      subgraph Browser ["Web Browser — [Deployment Node: Chrome, Firefox, Safari]"]
+        SPA["<b>Single-Page Application</b><br/><i>[Container: JavaScript / Angular]</i><br/>Provides banking functionality"]
+      end
+      subgraph Mobile ["Mobile Device — [Deployment Node: iOS / Android]"]
+        MobileApp["<b>Mobile App</b><br/><i>[Container: Xamarin]</i><br/>Mobile banking"]
+      end
+    end
+
+    subgraph Cloud ["AWS Cloud — [Deployment Node: us-east-1]"]
+      direction TB
+      subgraph WebServer ["Web Server — [Deployment Node: EC2 t3.medium x2]"]
+        WebApp["<b>Web Application</b><br/><i>[Container: Java / Spring MVC]</i><br/>Delivers static content"]
+      end
+      subgraph AppServer ["App Server — [Deployment Node: EC2 m5.large x4]"]
+        API["<b>API Application</b><br/><i>[Container: Java / Spring MVC]</i><br/>Provides banking API"]
+      end
+      subgraph DBServer ["Database Server — [Deployment Node: RDS Multi-AZ]"]
+        DB[("<b>Database</b><br/><i>[Container: Oracle 12c]</i><br/>Stores user data")]
+      end
+    end
+  end
+
+  SPA -- "makes API calls to<br/>[HTTPS]" --> API
+  MobileApp -- "makes API calls to<br/>[HTTPS]" --> API
+  WebApp -- "delivers to browser" --> SPA
+  API -- "reads/writes<br/>[JDBC]" --> DB
+
+  subgraph Legend["Legend"]
+    direction LR
+    LDN["Deployment Node"]:::deploynode
+    LC["Container"]:::container
+    LDB[("Database")]:::container
+    LDN ~~~ LC ~~~ LDB
+  end
+
+  classDef deploynode fill:#ffffff,color:#000,stroke:#888888,stroke-dasharray: 5 5
+  classDef container fill:#438dd5,color:#fff,stroke:#2e6295

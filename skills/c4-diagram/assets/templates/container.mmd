@@ -1,0 +1,46 @@
+%% C4 Container diagram
+%% Use: high-level architecture — applications and data stores inside the system
+%% Audience: technical (architects, developers, ops)
+%% Scope: one software system (zoomed in)
+%% When: always — shows technology choices and responsibility distribution
+
+---
+title: Internet Banking System — Container Diagram
+---
+flowchart TB
+  Customer(["<b>Personal Banking Customer</b><br/><i>[Person]</i><br/>A customer of the bank"])
+
+  subgraph IBS ["Internet Banking System — [Software System]"]
+    direction TB
+    WebApp["<b>Web Application</b><br/><i>[Container: Java / Spring MVC]</i><br/>Delivers static content<br/>and the single-page app"]
+    SPA["<b>Single-Page Application</b><br/><i>[Container: JavaScript / Angular]</i><br/>Provides banking<br/>functionality via browser"]
+    MobileApp["<b>Mobile App</b><br/><i>[Container: Xamarin]</i><br/>Provides banking<br/>functionality via mobile"]
+    API["<b>API Application</b><br/><i>[Container: Java / Spring MVC]</i><br/>Provides Internet Banking<br/>functionality via JSON/HTTPS API"]
+    DB[("<b>Database</b><br/><i>[Container: Oracle 12c]</i><br/>Stores user registration,<br/>hashed auth credentials, access logs")]
+  end
+
+  Email["<b>E-mail System</b><br/><i>[Software System, External]</i><br/>Sends e-mails"]:::external
+  Mainframe["<b>Mainframe Banking System</b><br/><i>[Software System, External]</i><br/>Stores core banking data"]:::external
+
+  Customer -- "visits" --> WebApp
+  Customer -- "views balances,<br/>makes payments using" --> SPA
+  Customer -- "views balances,<br/>makes payments using" --> MobileApp
+  WebApp -- "delivers to<br/>customer's browser" --> SPA
+  SPA -- "makes API calls to<br/>[JSON/HTTPS]" --> API
+  MobileApp -- "makes API calls to<br/>[JSON/HTTPS]" --> API
+  API -- "reads from and<br/>writes to [JDBC]" --> DB
+  API -- "sends e-mails using<br/>[SMTP]" --> Email
+  API -- "makes API calls to<br/>[XML/HTTPS]" --> Mainframe
+
+  subgraph Legend["Legend"]
+    direction LR
+    LP(["Person"]):::person
+    LC["Container"]:::container
+    LDB[("Database")]:::container
+    LE["External System"]:::external
+    LP ~~~ LC ~~~ LDB ~~~ LE
+  end
+
+  classDef person fill:#08427b,color:#fff,stroke:#052e56
+  classDef container fill:#438dd5,color:#fff,stroke:#2e6295
+  classDef external fill:#999999,color:#fff,stroke:#6b6b6b
